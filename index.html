@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Управленческий учёт по вашей выписке</title>
+<meta name="description" content="Загрузите банковскую выписку: сайт разнесёт операции по статьям и соберёт управленческий отчёт: выручка, расходы, прибыль, деньги на счёте и дивиденды по месяцам.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="recognize.js"></script>
+<script src="pdf-fonts.js" defer></script>
+<style>
+/* ============================================================
+   Токены и анимации как на сайте «УСН и НДС» (НейроБухгалтерия)
+   ============================================================ */
+:root {
+  --teal-600: #008AAA; --teal-550: #018DB0; --cyan-500: #2BB6D9; --cyan-400: #3BBADB;
+  --cyan-100: #E3F5FB; --cyan-050: #F3FBFD; --terracotta-500: #D1884F; --terracotta-100: #F7E7DA;
+  --ink: #000; --ink-700: #333; --ink-500: #5C5C5C; --ink-300: #9A9A9A; --hairline: #E4EBED; --white: #fff;
+  --danger: #C0392B; --danger-100: #FBE9E7; --pos: #1E8E6A;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 18px;
+  --shadow-brand: 0 10px 6px rgba(0,138,170,.23); --shadow-brand-soft: 0 4px 4px rgba(0,138,170,.17);
+  --shadow-card: 0 8px 24px rgba(0,138,170,.10); --shadow-lift: 0 14px 30px rgba(0,138,170,.18);
+  --ease-out: cubic-bezier(.22,1,.36,1); --dur: 200ms; --header-h: 72px;
+  --c0: #008AAA; --c1: #2BB6D9; --c2: #9ED9EA; --line: #D1884F;
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 16px); -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font-sans); color: var(--ink); background: var(--white); line-height: 1.5; overflow-x: hidden; }
+a { color: var(--teal-600); text-decoration: none; transition: color var(--dur) var(--ease-out); }
+a:hover { color: var(--terracotta-500); }
+:focus-visible { outline: 3px solid var(--cyan-400); outline-offset: 2px; border-radius: 4px; }
+.container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+[hidden] { display: none !important; }
+
+/* ---------- Большие кнопки (как на сайте УСН) ---------- */
+.cta { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font: 500 17px/1.2 var(--font-sans); padding: 14px 26px; border: none; border-radius: var(--radius-sm); cursor: pointer; text-align: center; transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), filter var(--dur) var(--ease-out); }
+.cta--primary { background: var(--teal-600); color: #fff; box-shadow: var(--shadow-brand); }
+.cta--primary:hover { color: #fff; transform: translateY(-2px); filter: brightness(1.06); }
+.cta--secondary { background: #fff; color: var(--teal-600); box-shadow: inset 0 0 0 2px var(--teal-600), var(--shadow-brand-soft); }
+.cta--secondary:hover { color: var(--teal-600); transform: translateY(-2px); }
+.cta--sm { font-size: 15px; padding: 9px 16px; }
+.cta svg { width: 18px; height: 18px; flex: none; }
+
+/* ---------- Шапка ---------- */
+.site-header { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline); }
+.header-inner { min-height: var(--header-h); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.wordmark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 21px; letter-spacing: -.01em; white-space: nowrap; color: var(--ink); }
+.wordmark:hover { color: var(--ink); }
+.wordmark__mark { width: 11px; height: 11px; background: var(--terracotta-500); flex: none; }
+.wordmark__a { color: var(--teal-600); }
+.nav { display: flex; align-items: center; gap: 26px; font-size: 16px; }
+.nav a { color: var(--ink); font-weight: 500; }
+.nav a:hover { color: var(--terracotta-500); }
+
+/* ---------- Секции ---------- */
+.section { padding: 88px 0; }
+.section--wash { background: var(--cyan-050); }
+.section__lead { font-size: 18px; color: var(--ink-500); margin: -22px 0 36px; max-width: 820px; }
+.h2 { font-weight: 700; font-size: clamp(27px, 4vw, 38px); line-height: 1.2; letter-spacing: -.01em; color: var(--teal-550); margin: 0 0 32px; }
+.h2__mark { display: inline-block; width: 13px; height: 13px; background: var(--terracotta-500); margin-right: 13px; vertical-align: middle; }
+
+/* ---------- Hero ---------- */
+.hero { position: relative; padding: 96px 0 88px; overflow: hidden; isolation: isolate; }
+.hero__inner { position: relative; z-index: 1; max-width: 920px; text-align: center; }
+.hero__aura { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.hero__grid { position: absolute; inset: 0; display: block; width: 100%; height: 100%; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); }
+.hero__aura::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 62% 58% at 50% 46%, rgba(255,255,255,.97) 0%, rgba(255,255,255,.88) 48%, rgba(255,255,255,0) 80%); }
+.orb { position: absolute; border-radius: 50%; will-change: transform; }
+.orb--teal { width: 620px; height: 620px; top: -180px; left: -140px; background: radial-gradient(circle, rgba(0,138,170,.22) 0%, rgba(0,138,170,0) 68%); animation: drift1 30s ease-in-out infinite alternate; }
+.orb--cyan { width: 560px; height: 560px; top: -60px; right: -160px; background: radial-gradient(circle, rgba(43,182,217,.24) 0%, rgba(43,182,217,0) 68%); animation: drift2 36s ease-in-out infinite alternate; }
+.orb--terracotta { width: 460px; height: 460px; bottom: -200px; left: 42%; background: radial-gradient(circle, rgba(209,136,79,.16) 0%, rgba(209,136,79,0) 68%); animation: drift3 42s ease-in-out infinite alternate; }
+@keyframes drift1 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px,46px) scale(1.09); } 100% { transform: translate(24px,-34px) scale(1.02); } }
+@keyframes drift2 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(-64px,56px) scale(1.06); } 100% { transform: translate(-18px,-28px) scale(.97); } }
+@keyframes drift3 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(-80px,-40px) scale(1.12); } 100% { transform: translate(50px,-14px) scale(1.03); } }
+.rise { animation: rise .85s var(--ease-out) both; animation-delay: var(--d, 0ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.js-reveal [data-reveal] { opacity: 0; transform: translateY(24px); transition: opacity .7s var(--ease-out), transform .7s var(--ease-out); transition-delay: var(--d, 0ms); }
+.js-reveal [data-reveal].is-visible { opacity: 1; transform: none; }
+.hero__title { font-weight: 700; font-size: clamp(34px, 6.2vw, 60px); line-height: 1.12; letter-spacing: -.015em; color: var(--teal-550); margin: 0 0 26px; }
+.grad { background: linear-gradient(90deg, var(--terracotta-500), var(--teal-600), var(--cyan-500), var(--terracotta-500)); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; animation: gradShift 11s ease-in-out infinite; }
+@keyframes gradShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+.hero__lead { font-weight: 500; font-size: clamp(17px, 2.2vw, 21px); line-height: 1.55; color: var(--ink-700); max-width: 780px; margin: 0 auto 36px; }
+.hero__actions { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.blocks { display: flex; gap: 10px; justify-content: center; margin-top: 48px; }
+.blocks__b { width: 15px; height: 15px; animation: beat 3.6s var(--ease-out) infinite; }
+.blocks__b--terracotta { background: var(--terracotta-500); }
+.blocks__b--teal { background: var(--teal-600); animation-delay: .28s; }
+.blocks__b--cyan { background: var(--cyan-500); animation-delay: .56s; }
+@keyframes beat { 0%, 55%, 100% { transform: scale(1); opacity: .85; } 22% { transform: scale(1.35); opacity: 1; } }
+.hero-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; text-align: left; }
+.hero-kpi { background: rgba(255,255,255,.9); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 18px 20px; box-shadow: var(--shadow-card); }
+.hero-kpi__v { font-size: 30px; font-weight: 700; color: var(--teal-600); line-height: 1.1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.hero-kpi__v small { font-size: 18px; }
+.hero-kpi__l { font-size: 14px; color: var(--ink-500); margin-top: 6px; line-height: 1.4; }
+
+/* ---------- Карточки «что умеет» и шаги ---------- */
+.grid { display: grid; gap: 22px; }
+.grid--2 { grid-template-columns: repeat(2, 1fr); }
+.grid--3 { grid-template-columns: repeat(3, 1fr); }
+.feat { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 28px 30px; display: flex; gap: 18px; align-items: flex-start; transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.feat:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.feat__title { font-size: 20px; font-weight: 600; color: var(--teal-600); margin: 0 0 8px; line-height: 1.3; }
+.feat__text { font-size: 16px; line-height: 1.55; color: var(--ink-700); margin: 0; }
+.icn { position: relative; flex: none; width: 50px; height: 50px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; background: var(--cyan-100); color: var(--teal-600); }
+.icn--terracotta { background: var(--terracotta-100); color: var(--terracotta-500); }
+.icn > svg:not(.icn__ring) { width: 24px; height: 24px; }
+.icn__ring { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); transform: rotate(-90deg); pointer-events: none; overflow: visible; }
+.icn__ring rect { fill: none; stroke: var(--terracotta-500); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; opacity: 0; }
+.feat--col { flex-direction: column; gap: 14px; }
+.ring .feat .icn__ring rect { animation: ringDraw 12s linear infinite; }
+.ring .feat:nth-child(2) .icn__ring rect { animation-delay: 2s; }
+.ring .feat:nth-child(3) .icn__ring rect { animation-delay: 4s; }
+.ring .feat:nth-child(6) .icn__ring rect { animation-delay: 6s; }
+.ring .feat:nth-child(5) .icn__ring rect { animation-delay: 8s; }
+.ring .feat:nth-child(4) .icn__ring rect { animation-delay: 10s; }
+.hero__hint { margin: 18px 0 0; font-size: 15px; color: var(--ink-500); }
+.hero__hint a { font-weight: 600; }
+@keyframes ringDraw { 0% { stroke-dashoffset: 100; opacity: 0; } 3% { opacity: 1; } 20% { stroke-dashoffset: 0; opacity: 1; } 30% { stroke-dashoffset: 0; opacity: 0; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.step { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 26px 28px; display: flex; flex-direction: column; gap: 12px; }
+.step__n { width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--teal-600); color: #fff; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-brand-soft); }
+.step__t { font-size: 20px; font-weight: 600; color: var(--teal-600); margin: 0; }
+.step p { margin: 0; color: var(--ink-700); font-size: 16px; line-height: 1.55; }
+.step .cta { align-self: flex-start; margin-top: auto; }
+.note { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 12px 16px; font-size: 15px; line-height: 1.55; color: var(--ink-700); background: var(--cyan-100); border-left: 3px solid var(--teal-600); margin: 22px 0 0; }
+.disclaimer { background: var(--terracotta-100); border-radius: var(--radius-lg); padding: 24px 28px; display: flex; gap: 18px; align-items: flex-start; margin-top: 30px; }
+.disclaimer p { margin: 0; color: var(--ink-700); line-height: 1.6; }
+.disclaimer b { color: var(--terracotta-500); }
+.site-footer { background: var(--teal-600); color: #fff; padding: 28px 0; font-size: 15px; }
+.footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.site-footer p { margin: 0; }
+.site-footer a { color: #fff; opacity: .92; text-decoration: underline; text-underline-offset: 3px; }
+.site-footer a:hover { color: #fff; opacity: 1; }
+
+/* ============================================================
+   Отчёт (приложение)
+   ============================================================ */
+.app { font-size: 15px; }
+.app h2 { font-size: 18px; font-weight: 600; color: var(--teal-600); margin: 0 0 12px; line-height: 1.3; }
+.apphead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.apphead__t { font-size: clamp(20px, 2.6vw, 26px); font-weight: 700; margin: 0 0 4px; line-height: 1.25; }
+.mu { color: var(--ink-500); font-size: 13px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border: 1.5px solid var(--hairline); background: #fff; color: var(--ink-700); border-radius: 10px; cursor: pointer; font: 500 14px/1.2 var(--font-sans); transition: border-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out), background var(--dur) var(--ease-out); }
+.btn:hover { border-color: var(--teal-600); color: var(--teal-600); }
+.btn.on { background: var(--teal-600); border-color: var(--teal-600); color: #fff; box-shadow: var(--shadow-brand-soft); }
+.btn.pri { background: var(--teal-600); border-color: var(--teal-600); color: #fff; }
+.btn.pri:hover { filter: brightness(1.06); color: #fff; }
+select.btn { padding: 8px 10px; max-width: 100%; }
+input.btn { cursor: text; }
+.ec { padding: 4px 8px; font-size: 13px; border-radius: 8px; }
+#adm { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+#msg { flex-basis: 100%; text-align: right; font-size: 13px; color: var(--danger); min-height: 0; }
+#msg.pos { color: var(--pos); }
+#tabs { display: inline-flex; flex-wrap: wrap; gap: 6px; background: #fff; border: 1px solid var(--hairline); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+#tabs button { border: none; background: transparent; color: var(--ink-700); cursor: pointer; font: 500 15px/1.2 var(--font-sans); padding: 9px 16px; border-radius: 9px; transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out); }
+#tabs button:hover { color: var(--teal-600); }
+#tabs button.on { background: var(--teal-600); color: #fff; box-shadow: var(--shadow-brand-soft); }
+#per { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; }
+.g { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.card { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 20px 22px; border: 1px solid transparent; min-width: 0; }
+.cb { font: inherit; color: inherit; cursor: pointer; width: 100%; text-align: left; transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.cb:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.sel { border-color: var(--teal-600); }
+.kl { color: var(--ink-500); font-size: 14px; }
+.kv { font-size: 28px; font-weight: 700; margin: 4px 0; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kv small { font-size: 14px; font-weight: 500; color: var(--ink-500); }
+.ks { font-size: 13px; color: var(--ink-500); }
+.pos { color: var(--pos); } .neg { color: var(--danger); }
+.two { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 18px; }
+svg { width: 100%; height: auto; display: block; }
+.gl { stroke: var(--hairline); } .ax { fill: var(--ink-500); font-size: 11px; font-family: var(--font-sans); }
+.c0 { fill: var(--c0); } .c1 { fill: var(--c1); } .c2 { fill: var(--c2); }
+.lg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-500); margin-top: 8px; }
+.lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.rw { display: grid; grid-template-columns: minmax(90px, 1.1fr) 1.4fr 62px; gap: 8px; align-items: center; font-size: 13px; margin: 8px 0; }
+.bar { height: 8px; background: #EAF1F3; border-radius: 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--teal-600), var(--cyan-500)); border-radius: 4px; }
+.rw b { text-align: right; font-weight: 600; } .rw.n .bar i { background: var(--terracotta-500); }
+.tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; white-space: nowrap; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--hairline); }
+th { color: var(--ink-500); font-weight: 600; font-size: 12px; background: var(--cyan-050); }
+td:first-child, th:first-child { text-align: left; position: sticky; left: 0; background: #fff; z-index: 1; }
+th:first-child { background: var(--cyan-050); }
+tr.h td { font-weight: 600; } tr.i td:first-child { padding-left: 24px; color: var(--ink-500); } tr.i td { color: var(--ink-500); }
+tr.s td { font-weight: 700; background: var(--cyan-100); } tr.s td:first-child { background: var(--cyan-100); }
+tr.p td { font-style: italic; color: var(--ink-500); font-size: 12px; }
+tr td.neg { color: var(--danger); } tr td.pos { color: var(--pos); }
+tr.cl { cursor: pointer; } tr.cl:hover td { background: var(--cyan-050); }
+tr.sb td { color: var(--ink-500); font-size: 12px; } tr.sb td:first-child { padding-left: 44px; }
+tr.sl td { background: var(--cyan-050); }
+.lt th, .lt td { text-align: left; } .lt td.r, .lt th.r { text-align: right; }
+.wrap { white-space: normal; min-width: 220px; max-width: 360px; line-height: 1.4; }
+.chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chip.h { background: var(--cyan-100); color: var(--teal-600); }
+.chip.m { background: #E8F0FF; color: #3559B5; }
+.chip.l { background: var(--terracotta-100); color: #A8622D; }
+.chip.u { background: var(--danger-100); color: var(--danger); }
+.chip.x { background: #EEF2F3; color: var(--ink-500); }
+mark { background: var(--terracotta-100); color: var(--ink); border-radius: 4px; padding: 0 3px; }
+.ins { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.ins li { display: flex; gap: 12px; align-items: flex-start; background: var(--cyan-050); border-radius: 12px; padding: 14px 16px; font-size: 15px; line-height: 1.5; color: var(--ink-700); }
+.ins li > i { width: 10px; height: 10px; flex: none; margin-top: 7px; background: var(--teal-600); }
+.ins li.w > i { background: var(--terracotta-500); }
+.ins b { display: block; color: var(--ink); margin-bottom: 2px; }
+.how3 { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.how3 li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-700); }
+.how3 .step__n { width: 28px; height: 28px; font-size: 14px; border-radius: 8px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; background: var(--cyan-050); border: 1px solid var(--hairline); border-radius: 12px; padding: 4px; }
+.seg button { border: none; background: transparent; color: var(--ink-700); cursor: pointer; font: 500 14px/1.2 var(--font-sans); padding: 7px 12px; border-radius: 9px; }
+.seg button:hover { color: var(--teal-600); }
+.seg button.on { background: var(--teal-600); color: #fff; box-shadow: var(--shadow-brand-soft); }
+.empty { text-align: center; padding: 40px 20px; color: var(--ink-500); }
+.fadein { animation: rise .7s var(--ease-out) both; }
+.foot { margin-top: 18px; font-size: 13px; color: var(--ink-500); line-height: 1.55; }
+
+/* ---------- Подсказки «?» ---------- */
+.hint { display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--cyan-100); color: var(--teal-600); font: 700 11px/1 var(--font-sans); align-items: center; justify-content: center; cursor: help; margin-left: 6px; vertical-align: 1px; flex: none; font-style: normal; user-select: none; }
+.hint:hover, .hint:focus { background: var(--teal-600); color: #fff; outline: none; }
+#tip { position: fixed; z-index: 100; max-width: 280px; background: var(--ink-700); color: #fff; font-size: 13px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); pointer-events: none; }
+.howto { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); margin-bottom: 18px; }
+.howto > summary { list-style: none; cursor: pointer; padding: 16px 52px 16px 22px; font-weight: 600; color: var(--teal-600); position: relative; }
+.howto > summary::-webkit-details-marker { display: none; }
+.howto > summary::after { content: ""; position: absolute; right: 22px; top: 50%; width: 9px; height: 9px; margin-top: -7px; border-right: 2px solid var(--teal-600); border-bottom: 2px solid var(--teal-600); transform: rotate(45deg); transition: transform var(--dur) var(--ease-out); }
+.howto[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.howto ol { margin: 0; padding: 0 22px 18px 42px; display: grid; gap: 10px; color: var(--ink-700); line-height: 1.55; }
+
+/* ---------- Главное ---------- */
+.main { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 24px 26px; display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start; border-top: 5px solid var(--pos); margin-bottom: 18px; }
+.main__light { width: 54px; height: 54px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: #E2F4EC; color: var(--pos); }
+.main__light svg { width: 28px; height: 28px; }
+.main--y { border-top-color: var(--terracotta-500); } .main--y .main__light { background: var(--terracotta-100); color: var(--terracotta-500); }
+.main--r { border-top-color: var(--danger); } .main--r .main__light { background: var(--danger-100); color: var(--danger); }
+.main__k { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-500); }
+.main__t { font-size: clamp(20px, 2.6vw, 26px); font-weight: 700; margin: 2px 0 8px; line-height: 1.25; }
+.main__x { margin: 0; font-size: 17px; line-height: 1.6; color: var(--ink-700); }
+.main__x b { color: var(--ink); white-space: nowrap; }
+.main__s { margin: 10px 0 0; font-size: 14px; color: var(--ink-500); }
+.main__m { margin: 10px 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-700); padding: 10px 14px; background: var(--cyan-050); border-radius: 10px; }
+.main__m b { white-space: nowrap; }
+
+/* ---------- Водопад ---------- */
+.wf { display: grid; gap: 7px; }
+.wf__r { display: grid; grid-template-columns: minmax(120px, 210px) 1fr 86px; gap: 12px; align-items: center; font-size: 14px; }
+.wf__l { color: var(--ink-700); line-height: 1.3; }
+.wf__t { position: relative; height: 24px; background: #F2F7F8; border-radius: 5px; }
+.wf__b { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--terracotta-500); opacity: .85; }
+.wf__r.tot .wf__l { font-weight: 600; color: var(--ink); }
+.wf__r.tot .wf__b { background: linear-gradient(90deg, var(--teal-600), var(--cyan-500)); opacity: 1; }
+.wf__r.tot .wf__b.neg { background: var(--danger); }
+.wf__v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Безубыточность: шкала ---------- */
+.scale { position: relative; height: 16px; border-radius: 8px; background: #EAF1F3; margin: 52px 0 56px; }
+.scale__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: linear-gradient(90deg, var(--teal-600), var(--cyan-500)); }
+.scale__mark, .scale__now { position: absolute; top: -10px; bottom: -10px; width: 3px; border-radius: 2px; transform: translateX(-50%); }
+.scale__mark { background: var(--terracotta-500); }
+.scale__now { background: var(--ink-700); }
+.scale__mark span, .scale__now span { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 13px; font-weight: 600; text-align: center; line-height: 1.3; }
+.scale__mark span { bottom: calc(100% + 6px); color: var(--terracotta-500); }
+.scale__now span { top: calc(100% + 6px); color: var(--ink-700); }
+
+/* ---------- План-факт ---------- */
+.pin { width: 96px; text-align: right; }
+.pfbar { position: relative; width: 120px; height: 8px; background: #EAF1F3; border-radius: 4px; }
+.pfbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--teal-600); border-radius: 4px; }
+.pfbar.bad i { background: var(--danger); } .pfbar.good i { background: var(--pos); }
+.pfbar s { position: absolute; left: 66.7%; top: -4px; bottom: -4px; width: 2px; background: var(--ink-700); }
+td.bad { color: var(--danger); font-weight: 600; } td.good { color: var(--pos); font-weight: 600; }
+.hm td { text-align: center; font-size: 12px; min-width: 54px; }
+.hm td:first-child { text-align: left; }
+.hm .b1 { background: #FBE9E7; color: #A93226; } .hm .b2 { background: #F5C6BF; color: #922B21; } .hm .b3 { background: #E07A6B; color: #fff; }
+.hm .g1 { background: #E2F4EC; color: #17694F; } .hm .g2 { background: #BFE6D5; color: #135A43; } .hm .g3 { background: #6CC3A0; color: #fff; }
+.lgd { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-500); margin-top: 10px; }
+.lgd i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+
+/* ---------- Анимация разбора ---------- */
+.parse { max-width: 760px; margin: 10px auto 30px; padding: 30px 32px; }
+.parse h2 { font-size: 22px; }
+.steps { list-style: none; padding: 0; margin: 18px 0 20px; }
+.steps li { display: flex; align-items: center; gap: 12px; padding: 10px 0; color: var(--ink-300); font-size: 16px; font-weight: 500; transition: color .3s; }
+.steps li.on { color: var(--ink); } .steps li.done { color: var(--teal-600); }
+.steps .dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.steps li.on .dot { border-color: var(--teal-600); border-top-color: transparent; animation: spin .8s linear infinite; }
+.steps li.done .dot { background: var(--teal-600); border-color: var(--teal-600); }
+.steps li.done .dot::after { content: ""; width: 9px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px, -1px); }
+.steps .cnt { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pbar { height: 8px; border-radius: 4px; background: #EAF1F3; overflow: hidden; }
+.pbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--teal-600), var(--cyan-500)); }
+.ticker { margin-top: 16px; font-size: 14px; min-height: 66px; background: var(--cyan-050); border-radius: 10px; padding: 12px 14px; color: var(--ink-700); line-height: 1.5; }
+.ticker b { color: var(--teal-600); }
+
+/* ---------- Адаптив ---------- */
+@media (max-width: 980px) {
+  .grid--2, .grid--3 { grid-template-columns: 1fr; }
+  .ring .feat:nth-child(4) .icn__ring rect { animation-delay: 6s; }
+  .ring .feat:nth-child(5) .icn__ring rect { animation-delay: 8s; }
+  .ring .feat:nth-child(6) .icn__ring rect { animation-delay: 10s; }
+}
+@media (max-width: 900px) { .nav { display: none; } }
+@media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .container { padding: 0 16px; }
+  .section { padding: 60px 0; }
+  .hero { padding: 56px 0 60px; }
+  .hero__actions .cta { width: 100%; }
+  .hero-kpis { grid-template-columns: 1fr; }
+  .feat, .step { padding: 20px; }
+  .feat { flex-direction: column; gap: 14px; }
+  .section__lead { margin: -18px 0 28px; font-size: 17px; }
+  .wordmark { font-size: 18px; }
+  .site-header .cta--sm { padding: 8px 12px; font-size: 14px; }
+  .disclaimer { flex-direction: column; padding: 20px; }
+  .card { padding: 16px; }
+  .kv { font-size: 23px; }
+  #adm { justify-content: flex-start; } #msg { text-align: left; }
+  .parse { padding: 22px 18px; }
+  .ins { grid-template-columns: 1fr; }
+  .main { grid-template-columns: 1fr; padding: 20px; }
+  .main__x { font-size: 16px; }
+  .wf__r { grid-template-columns: 96px 1fr 64px; gap: 8px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="wordmark" href="#top" aria-label="Управленческий P&amp;L, наверх">
+      <span class="wordmark__mark" aria-hidden="true"></span>
+      <span><span class="wordmark__a">P&amp;L</span> из выписки</span>
+    </a>
+    <nav class="nav" aria-label="Разделы">
+      <a href="#about">Что умеет</a>
+      <a href="#report">Отчёт</a>
+      <a href="#report" data-goto="rec">Как распознано</a>
+      <a href="#how">Проверить на своих данных</a>
+    </nav>
+    <a class="cta cta--primary cta--sm" href="kartochka-51-primer.xlsx" download="Карточка счета 51 (пример).xlsx">Скачать пример</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="top">
+    <div class="hero__aura" aria-hidden="true">
+      <canvas class="hero__grid"></canvas>
+      <span class="orb orb--teal"></span>
+      <span class="orb orb--cyan"></span>
+      <span class="orb orb--terracotta"></span>
+    </div>
+    <div class="container hero__inner">
+      <h1 class="hero__title rise" style="--d:0ms">Управленческий учёт <span class="grad">по вашей выписке</span></h1>
+      <p class="hero__lead rise" style="--d:120ms">Выгружаете из 1С карточку счёта 51, а сайт сам раскладывает каждую оплату по статьям и собирает управленческий отчёт: выручку, расходы, прибыль, деньги на счетах и дивиденды по месяцам. Ниже готовый пример за 2026 год.</p>
+      <div class="hero__actions rise" style="--d:240ms">
+        <a class="cta cta--primary" href="#report">Смотреть отчёт</a>
+        <a class="cta cta--secondary" href="kartochka-51-primer.xlsx" download="Карточка счета 51 (пример).xlsx">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Скачать пример карточки 51</a>
+      </div>
+      <p class="hero__hint rise" style="--d:300ms">Как выгрузить такую же карточку из своей 1С<span class="hint" tabindex="0" role="button" aria-label="Как выгрузить из 1С" data-tip="1С → Отчёты → Стандартные отчёты → Карточка счёта. Организация, период, счёт 51. «Показать настройки» → «Группировка» → «По дням». «Сформировать», затем дискета → «Лист Excel 2007-… (.xlsx)». Все расчётные счета попадут в одну выгрузку.">?</span> · <a href="#how" data-open-how>инструкция по шагам</a></p>
+      <div class="hero-kpis rise" style="--d:360ms">
+        <div class="hero-kpi"><div class="hero-kpi__v" id="hk1">2 268</div><div class="hero-kpi__l">операций в выписке-примере</div></div>
+        <div class="hero-kpi"><div class="hero-kpi__v" id="hk2">100%</div><div class="hero-kpi__l">распознано автоматически, без ручной разноски</div></div>
+        <div class="hero-kpi"><div class="hero-kpi__v" id="hk3">11 <small>статей</small></div><div class="hero-kpi__l" id="hk3l">P&amp;L за 12 месяцев</div></div>
+      </div>
+      <div class="blocks rise" style="--d:480ms" aria-hidden="true">
+        <span class="blocks__b blocks__b--terracotta"></span><span class="blocks__b blocks__b--teal"></span><span class="blocks__b blocks__b--cyan"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="about" style="padding-top:24px">
+    <div class="container">
+      <h2 class="h2" data-reveal><span class="h2__mark" aria-hidden="true"></span>Что сайт делает с выпиской</h2>
+      <p class="section__lead" data-reveal>Вы выгружаете из 1С карточку счёта 51, а сайт за минуту делает работу финансиста: руководитель видит, сколько бизнес заработал, где деньги и что пошло не так.</p>
+      <div class="grid grid--3 ring">
+        <div class="feat feat--col" data-reveal>
+          <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><path d="M17 15l2 2 3-4"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Разносит оплаты по статьям</h3><p class="feat__text">Берёт из 1С счёт и статью ДДС, читает назначение платежа. Незнакомое ждёт в «без категории», а ваши правки сайт запоминает для следующих выписок.</p></div>
+        </div>
+        <div class="feat feat--col" data-reveal style="--d:80ms">
+          <span class="icn icn--terracotta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Считает прибыль</h3><p class="feat__text">Выручка, расходы, прибыль и дивиденды по месяцам, сравнение с прошлым периодом и с прошлым годом, выгрузка в PDF и Excel.</p></div>
+        </div>
+        <div class="feat feat--col" data-reveal style="--d:160ms">
+          <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14.5h2"/><path d="M7 6V4.5h10V6"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Показывает деньги</h3><p class="feat__text">Остаток на всех расчётных счетах, на сколько месяцев хватит денег и прогноз. Кредит и покупка оборудования показаны отдельно от прибыли.</p></div>
+        </div>
+        <div class="feat feat--col" data-reveal style="--d:240ms">
+          <span class="icn icn--terracotta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5c2.4.2 4 1.8 4.5 4.5"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Разбирает клиентов</h3><p class="feat__text">Кто приносит 80% выручки, какой средний чек, кто пришёл в этом месяце, а кто перестал платить.</p></div>
+        </div>
+        <div class="feat feat--col" data-reveal style="--d:320ms">
+          <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Проверяет запас прочности</h3><p class="feat__text">Точка безубыточности: при какой выручке бизнес в нуле. План-факт: где расходы вышли за план, с подсветкой по месяцам.</p></div>
+        </div>
+        <div class="feat feat--col" data-reveal style="--d:400ms">
+          <span class="icn icn--terracotta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg><svg class="icn__ring" viewBox="0 0 60 60"><rect x="1" y="1" width="58" height="58" rx="14" pathLength="100"/></svg></span>
+          <div><h3 class="feat__title">Объясняет простыми словами</h3><p class="feat__text">Главное в трёх фразах, всплески расходов и убыточные месяцы, значки «?» у каждого термина. Разберётся и тот, кто не финансист.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--wash" id="report">
+    <div class="container app">
+      <h2 class="h2" id="rt"><span class="h2__mark" aria-hidden="true"></span>Отчёт по выписке-примеру</h2>
+      <div class="apphead">
+        <div><h3 class="apphead__t" id="t">Управленческий P&amp;L</h3><div class="mu" id="meta">Загружаю пример выписки…</div></div>
+        <div id="adm"></div>
+      </div>
+      <div id="tabs" hidden></div>
+      <div id="per"></div>
+      <div id="vtp"></div>
+      <div id="app"></div>
+      <p class="foot">Расчёт по кассовому методу: по датам движения денег, без начислений. Налоги и взносы с зарплаты входят в операционные расходы, налог на прибыль показан после операционной прибыли. Дивиденды показаны ниже чистой прибыли как распределение, в расходы не входят.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="container">
+      <h2 class="h2" data-reveal><span class="h2__mark" aria-hidden="true"></span>Проверьте на своих данных</h2>
+      <p class="section__lead" data-reveal>Три шага, и вы увидите свой бизнес в цифрах управленческого учёта. Пример выше построен ровно по такой выгрузке.</p>
+      <div class="grid grid--3">
+        <div class="step" data-reveal>
+          <span class="step__n">1</span><h3 class="step__t">Выгрузите из 1С карточку счёта 51<span class="hint" tabindex="0" role="button" aria-label="Как выгрузить" data-tip="1С → Отчёты → Стандартные отчёты → Карточка счёта. Организация, период, счёт 51. «Показать настройки» → «Группировка» → «По дням». «Сформировать», затем дискета → «Лист Excel 2007-… (.xlsx)».">?</span></h3>
+          <p>Это движение денег по всем расчётным счетам сразу, даже если банков несколько. Контрагенты, статьи ДДС и корреспондирующие счета подтянутся сами.</p>
+          <details class="howto" id="how1c" style="box-shadow:none;background:var(--cyan-050);margin:0"><summary>Как выгрузить, по шагам</summary><ol>
+            <li>Отчёты → Стандартные отчёты → Карточка счёта.</li>
+            <li>Выберите организацию, период и счёт 51 «Расчётные счета».</li>
+            <li>«Показать настройки» → вкладка «Группировка» → галочка «По дням».</li>
+            <li>«Сформировать» и проверьте, что контрагенты видны в колонке «Аналитика».</li>
+            <li>Значок дискеты (или Главное меню → Файл → Сохранить как) → «Лист Excel 2007-… (.xlsx)».</li></ol></details>
+          <a class="cta cta--secondary cta--sm" href="kartochka-51-primer.xlsx" download="Карточка счета 51 (пример).xlsx">Скачать пример карточки</a>
+        </div>
+        <div class="step" data-reveal style="--d:80ms">
+          <span class="step__n">2</span><h3 class="step__t">Загрузите файл</h3>
+          <p>Подойдёт .xlsx или .xls прямо из 1С, ничего переделывать не нужно. Сайт разложит операции по статьям, кредиты, покупку оборудования и переводы между своими счетами отделит от прибыли.</p>
+          <label class="cta cta--primary cta--sm">Загрузить выписку<input type="file" accept=".xlsx,.xls,.csv" hidden data-upload></label>
+        </div>
+        <div class="step" data-reveal style="--d:160ms">
+          <span class="step__n">3</span><h3 class="step__t">Смотрите отчёт</h3>
+          <p>Прибыль, деньги на счетах, клиенты, точка безубыточности и план-факт. Нераспознанные платежи попадут в «без категории», их можно разнести вручную, и сайт запомнит выбор.</p>
+          <p class="mu" style="font-size:14px">Нет 1С? Подойдёт выписка из банка в простой таблице: <a href="shablon-vypiski-uu.xlsx" download="Простой шаблон выписки.xlsx">скачать простой шаблон</a>.</p>
+        </div>
+      </div>
+      <p class="note" data-reveal>Файл обрабатывается прямо в браузере и никуда не отправляется. Ваши правки сохраняются только на этом устройстве, вернуть пример можно одной кнопкой.</p>
+      <div class="disclaimer" data-reveal>
+        <span class="icn icn--terracotta" style="background:#fff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg></span>
+        <p><b>Это демонстрация.</b> Операции распознаются по словарю признаков прямо в браузере, без сервера, поэтому ваши данные никуда не уходят. Отчёт управленческий и не заменяет бухгалтерскую и налоговую отчётность.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="tip" role="tooltip" hidden></div>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p>© 2026 НейроБухгалтерия · Марина</p>
+    <div class="footer-links"><a href="https://t.me/neurobuh" target="_blank" rel="noopener">t.me/neurobuh</a></div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   Управленческий P&L по выписке. Данные живут в браузере посетителя.
+   ============================================================ */
+const {classify,UNC_IN,UNC_OUT,MOVE,LOAN,CAPEX}=window.Recognizer;
+const PNL=new Set(['rev','opex','tax','div']);
+const bankShort=s=>{const m=String(s||'').match(/(\d{20})\s*,?\s*(.*)/);return m?(m[2]||'Банк').replace(/^(ПАО|АО|ООО)\s+/,'').replace(/"/g,'')+' ··'+m[1].slice(-4):String(s||'')};
+const acctLine=r=>[r.x?'счёт '+r.x:'',r.t||'',r.r?bankShort(r.r):''].filter(Boolean).join(' · ');
+const TEMPLATE_URL='kartochka-51-primer.xlsx',TEMPLATE_NAME='Карточка счета 51 (пример).xlsx';
+const MN=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const MF=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const MG=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const MD=['январю','февралю','марту','апрелю','маю','июню','июлю','августу','сентябрю','октябрю','ноябрю','декабрю'];
+const MP=['январе','феврале','марте','апреле','мае','июне','июле','августе','сентябре','октябре','ноябре','декабре'];
+const nf=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0});
+const M=v=>(v/1e6).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1});
+const P=v=>(Math.abs(v)<.05?0:v).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+const f=v=>{const x=Math.round(v/1e3);return nf.format(x||0)};
+const sum=a=>a.reduce((s,x)=>s+x,0);
+const pc=(a,b)=>b?a/b*100:0;
+const $=id=>document.getElementById(id);
+const isUnc=c=>c===UNC_IN||c===UNC_OUT;
+const grp=n=>CATG[n]||(n===UNC_IN?'rev':n===MOVE||/перевод\S* между|перемещени/i.test(n)?'move':n===LOAN||/^(кредит|займ)/i.test(n)?'fin':n===CAPEX||/^покупка оборуд|инвестиц/i.test(n)?'inv':/^выруч|^доход|^возврат\S* клиент/i.test(n)?'rev':/дивиденд/i.test(n)?'div':/налог.*прибыл|прибыл.*налог/i.test(n)?'tax':'opex');
+const yr=k=>+k.slice(0,4),mo=k=>+k.slice(5)-1,FULL=k=>MF[mo(k)]+' '+yr(k);
+const key=r=>r.d+'|'+r.a+'|'+r.n+'|'+(r.p!==undefined?r.p:'#'+(r.o||r.c));
+let cmpMode='',RWN=[],PV={},TYPES={},showTypes=false;
+let view='rep',q='',fc='',iss='',lim=100,edit=null,RULES={},CATG={},VIDL={},VBYC={},CL=[],adding=null,delv=null,fv='',EXP=null,PL=[],dlg=null,GL={rev:'Выручка',opex:'Операционные расходы',tax:'Налог на прибыль',div:'Дивиденды',inv:'Инвестиции',fin:'Кредиты и займы',move:'Переводы между своими счетами'},CATMAP={},sc='all',OPR=[],MULTI=new Set();
+let rq='',rf='',rlim=60,ANIM=null,FADE=false,OWN=false,DIRTY=false,FIXVAR={},PLAN={},cliAll=false;
+const VARDEF=new Set(['Маркетинг и реклама','Подрядчики (Услуги)','Услуги банка','Закупки','Логистика и доставка']);
+
+/* ---------- Пояснения простым языком ---------- */
+const GLOSS={
+ rev:'Все деньги, которые заплатили клиенты за товары и услуги. Займы и возвраты сюда не входят.',
+ opex:'Всё, что бизнес тратит на ежедневную работу: зарплата и налоги с неё, аренда, реклама, сервисы, подрядчики.',
+ ebit:'Выручка минус операционные расходы. Сколько бизнес заработал на своей основной работе.',
+ margin:'Какая доля выручки остаётся прибылью. Маржа 20% значит: из каждых 100 ₽ выручки 20 ₽ остаются бизнесу.',
+ tax:'Налог на прибыль, если он виден отдельным платежом. Когда все налоги платятся единым налоговым платежом (ЕНП), они попадают в «Налоги и взносы», а здесь будет 0.',
+ net:'Прибыль после налога на прибыль. Это то, что бизнес заработал за период.',
+ div:'Деньги, которые владельцы забрали себе из прибыли. Это не расход бизнеса, а распределение заработанного.',
+ keep:'Прибыль за вычетом дивидендов: сколько заработанного осталось в бизнесе на развитие и запас.',
+ pp:'Процентный пункт, разница между процентами. Маржа была 40%, стала 42%: рост на 2 п.п.',
+ cash:'Кассовый метод: операция попадает в тот месяц, когда деньги пришли или ушли со счёта, а не когда подписан акт.',
+ dds:'Движение денежных средств: сколько денег было на счёте, сколько пришло, сколько ушло и сколько осталось.',
+ runway:'На сколько месяцев хватит денег на счёте, если поступления вдруг остановятся, а расходы останутся прежними.',
+ abc:'Клиенты делятся на группы: A приносят 80% выручки, B ещё 15%, C оставшиеся 5%. Группу A важно беречь в первую очередь.',
+ be:'Выручка в месяц, при которой бизнес работает в ноль: доходы покрывают все расходы, но прибыли ещё нет.',
+ safety:'На сколько процентов может упасть выручка, прежде чем бизнес уйдёт в минус.',
+ fixvar:'Постоянные расходы почти не зависят от продаж: зарплата, аренда, сервисы. Переменные растут вместе с выручкой: реклама, подрядчики, комиссии.',
+ plan:'Сколько вы рассчитываете получить или потратить по статье за месяц. По умолчанию это среднее за все загруженные месяцы.',
+ forecast:'Прогноз продолжает средний поток денег от текущей работы за последние месяцы, без кредитов, покупок оборудования и дивидендов. Это ориентир, а не обещание.',
+ inv:'Покупка того, что служит годами: ноутбуки, серверы, оборудование. Деньги уходят сразу, а в расходы попадают постепенно, поэтому в прибыль эта строка не входит.',
+ fin:'Полученный кредит увеличивает деньги на счёте, но это не доход, его придётся вернуть. Возврат долга тоже не расход. В прибыль попадают только проценты.',
+ b2b:'B2B: продажи компаниям и ИП, они платят по счёту на расчётный счёт.',
+ b2c:'B2C: продажи частным лицам. Здесь это подписки, оплаченные картой: банк перечисляет их через эквайринг.',
+ offpnl:'Эти деньги прошли через счёт, но не являются ни доходом, ни расходом: покупка ноутбуков и оборудования, кредит, переводы между своими счетами. Прибыль от них не меняется, подробнее на вкладке «Деньги».',
+ move:'Перевод с одного своего расчётного счёта на другой. Денег у бизнеса от этого не прибавилось и не убавилось, поэтому в сумме строка даёт ноль.',
+ card51:'1С → Отчёты → Стандартные отчёты → Карточка счёта. Выберите организацию, период и счёт 51. «Показать настройки» → вкладка «Группировка» → галочка «По дням». «Сформировать». Затем значок дискеты (или Файл → Сохранить как) → «Лист Excel 2007-… (.xlsx)». Все расчётные счета попадут в одну выгрузку.'};
+const hint=k=>`<span class="hint" tabindex="0" role="button" aria-label="Пояснение" data-tip="${esc(GLOSS[k]||k)}">?</span>`;
+const perLabel=keys=>{const n=keys.length,multi=yr(keys[0])!==yr(keys[n-1]);return n===1?'За '+FULL(keys[0]):'С '+MG[mo(keys[0])]+(multi?' '+yr(keys[0]):'')+' по '+FULL(keys[n-1])};
+const mln=v=>`${M(v)}<small> млн ₽</small>`;
+const kc=(t,v,s,hk,neg)=>`<div class="card"><div class="kl">${t}${hk?hint(hk):''}</div><div class="kv${neg?' neg':''}">${v}</div><div class="ks">${s}</div></div>`;
+const SIGN=r=>{const g=grp(r.c);return g==='rev'?r.a<0&&!/возврат/i.test(r.c):PNL.has(g)?r.a>0:false};
+const fd=r=>String(r.d).padStart(2,'0')+'.'+r.m.slice(5)+'.'+r.m.slice(0,4);
+const money=v=>v.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
+const retag=(r,nc)=>{const o=r.o||r.c,x={...r,c:nc};delete x.v;if(nc===o)delete x.o;else x.o=o;return x};
+
+/* ---------- Хранение в браузере (localStorage) ---------- */
+const LSP='uu26:';
+const LS={
+ get:k=>{try{const v=localStorage.getItem(LSP+k);return v?JSON.parse(v):null}catch(e){return null}},
+ set:(k,v)=>{try{localStorage.setItem(LSP+k,JSON.stringify(v));return true}catch(e){return false}},
+ clear:()=>{try{Object.keys(localStorage).filter(k=>k.startsWith(LSP)).forEach(k=>localStorage.removeItem(k))}catch(e){}}};
+let saveT=null;
+function saveTx(){DIRTY=true;clearTimeout(saveT);saveT=setTimeout(()=>{if(!LS.set('tx',Object.fromEntries(ALL))){note='Браузер не дал сохранить данные: правки пропадут после закрытия страницы.';bad=1;render()}},60)}
+async function wm(mk,rows){ALL.set(mk,rows);saveTx()}
+async function saveRules(){LS.set('cfg/rules',Object.values(RULES));saveTx()}
+async function persist(d,rows){LS.set('cfg/'+d,rows);saveTx()}
+function loadCfg(){const g=k=>LS.get('cfg/'+k)||[];
+ g('catmap').forEach(x=>{CATMAP[x.f]=x.c});g('labels').forEach(x=>{GL[x.g]=x.t});
+ g('vids').forEach(x=>{(VIDL[x.c]=VIDL[x.c]||[]).push(x.v)});g('cats').forEach(x=>{CATG[x.c]=x.g});
+ g('rules').forEach(x=>{RULES[x.n+'|'+x.f]=x});g('types').forEach(x=>{TYPES[x.n]=x.t});
+ FIXVAR=LS.get('cfg/fixvar')||{};PLAN=LS.get('cfg/plan')||{};if(LS.get('cfg/fixvar')||LS.get('cfg/plan'))DIRTY=true}
+
+const catRows=()=>Object.entries(CATG).map(([c,g])=>({c,g})),vidRows=()=>Object.entries(VIDL).flatMap(([c,a])=>a.map(v=>({c,v})));
+const curVid=r=>{const v=subOf(r);return(v==='Без вида'||(grp(r.c)==='rev'&&!r.s&&!TYPES[r.n]&&!r.v))?'':v};
+async function applyChange(m,i,o){
+ const row=ALL.get(m)[i],f=row.o||row.c,n=row.n,nc=o.nc||row.c,nv=o.nv||'',cch=nc!==row.c,vch=!!nv&&nv!==curVid(row);
+ try{
+  if(sc==='all'){
+   if(vch){TYPES[n]=nv;await persist('types',Object.entries(TYPES).map(([n,t])=>({n,t})));
+    for(const mk of keysAll()){let ch=false;const rows=ALL.get(mk).map(r=>{if(r.n===n&&r.s){ch=true;const{s,...x}=r;return x}return r});if(ch)await wm(mk,rows)}}
+   if(cch){const k=n+'|'+f;if(nc===f)delete RULES[k];else RULES[k]={n,f,c:nc};await persist('rules',Object.values(RULES));
+    for(const mk of keysAll()){let ch=false;const rows=ALL.get(mk).map(r=>{if(r.n===n&&(r.o||r.c)===f&&r.c!==nc){ch=true;return retag(r,nc)}return r});if(ch)await wm(mk,rows)}}}
+  else if(cch||vch){const upd=r=>{const x=cch?retag(r,nc):r;return vch?{...x,s:nv}:x};await wm(m,ALL.get(m).map((r,j)=>j===i?upd(r):r))}
+  adding=null;say(cch&&sc==='all'?'Сохранено. Операции этого контрагента перенесены, следующие выписки разнесутся так же.':'Сохранено.',0)}
+ catch(e){say('Не удалось сохранить изменение.',1)}}
+async function addOk(){
+ const nm=$('an')?$('an').value.trim():'';if(!nm||!adding)return;const{m,i,k}=adding,row=ALL.get(m)[i];
+ try{
+  if(k==='c'){if(!CL.includes(nm)){CATG[nm]=$('ag').value;await persist('cats',catRows())}await applyChange(m,i,{nc:nm})}
+  else{const a=VIDL[row.c]=VIDL[row.c]||[];if(!a.includes(nm))a.push(nm);await persist('vids',vidRows());await applyChange(m,i,{nv:nm})}}
+ catch(e){say('Не удалось добавить.',1)}}
+function paintList(){
+ const s=q.trim().toLowerCase();
+ const a=OPR.filter(r=>(!fc||r.c===fc)&&(!fv||subOf(r)===fv)&&(!iss||(iss==='multi'?MULTI.has(r.n):iss==='sign'?SIGN(r):iss==='unc'?isUnc(r.c):!!r.o))&&(!s||(r.n+' '+(r.p||'')+' '+acctLine(r)+' '+r.c+' '+subOf(r)+' '+r.a).toLowerCase().includes(s)));
+ a.sort((x,y)=>x.m<y.m?1:x.m>y.m?-1:y.d-x.d);
+ const opt=(arr,cur)=>arr.map(x=>`<option value="${esc(x)}"${x===cur?' selected':''}>${esc(x)}</option>`).join('');
+ const gsel=inc=>`<select class="btn ec" id="ag"><option value="opex">Операционные расходы</option><option value="rev"${inc?' selected':''}>Выручка</option><option value="tax">Налог на прибыль</option><option value="div">Дивиденды</option><option value="inv">Инвестиции (вне прибыли)</option><option value="fin">Кредиты и займы (вне прибыли)</option><option value="move">Переводы между счетами (вне прибыли)</option></select>`;
+ const box=(ph,ex)=>`<div style="display:flex;gap:6px;flex-wrap:wrap"><input class="btn ec" id="an" placeholder="${ph}" style="width:170px">${ex||''}<button class="btn ec on" data-act="addok">OK</button><button class="btn ec" data-act="addx">Отмена</button></div>`;
+ const tr=a.slice(0,lim).map(r=>{
+  const ad=adding&&adding.m===r.m&&adding.i===r.i,at=`data-m="${r.m}" data-i="${r.i}"`;
+  const cat=ad&&adding.k==='c'?box('Название категории',gsel(r.a>0)):`<select class="btn ec" data-act="cat" ${at}>${opt(CL,r.c)}<option value="__new">+ Новая категория…</option></select>`;
+  const cvd=curVid(r),vid=ad&&adding.k==='v'?box('Название подкатегории'):`<select class="btn ec" data-act="vid" ${at}>${cvd===''?'<option value="" selected>Без подкатегории</option>':''}${opt([...(VBYC[r.c]||[])].sort(),cvd)}<option value="__new">+ Новая подкатегория…</option></select>`;
+  return`<tr${isUnc(r.c)?' class="sl"':''}><td>${fd(r)}</td><td class="wrap">${esc(r.n)}${r.p?`<div class="mu">${esc(r.p)}</div>`:''}${acctLine(r)?`<div class="mu" style="color:var(--teal-600)">${esc(acctLine(r))}</div>`:''}</td><td>${cat}${r.o?`<div class="mu">было: ${esc(r.o)}</div>`:''}</td><td>${vid}</td><td class="${r.a<0?'neg':''}">${money(r.a)}</td></tr>`}).join('');
+ $('opl').innerHTML=`<div class="mu" style="margin-bottom:6px">Найдено операций: ${nf.format(a.length)}${fc?'. Категория: '+esc(fc):''}${fv?', подкатегория: '+esc(fv):''} ${fc||fv?'<button class="btn ec" data-act="top">К итогам</button>':''}</div><div class="tw"><table class="lt"><thead><tr><th>Дата</th><th>Контрагент и назначение</th><th>Категория</th><th>Подкатегория</th><th class="r">Сумма, ₽</th></tr></thead><tbody>${tr}</tbody></table></div>${a.length>lim?'<div style="margin-top:10px"><button class="btn" data-act="more">Показать ещё</button></div>':''}`}
+function opsView(keys){
+ $('t').textContent='Проверка операций';
+ OPR=[];keys.forEach(k=>ALL.get(k).forEach((r,i)=>OPR.push({...r,m:k,i})));
+ const byN={};OPR.forEach(r=>(byN[r.n]=byN[r.n]||new Set()).add(r.c));
+ MULTI=new Set(Object.keys(byN).filter(n=>byN[n].size>1));
+ const nS=OPR.filter(SIGN).length,nM=OPR.filter(r=>r.o).length,nU=OPR.filter(r=>isUnc(r.c)).length;
+ let inc=0,out=0;OPR.forEach(r=>r.a>0?inc+=r.a:out-=r.a);
+ const cs={};OPR.forEach(r=>{const x=cs[r.c]=cs[r.c]||{n:0,s:0};x.n++;x.s+=r.a});
+ const CATS=[...new Set([...Object.keys(CATG),...keysAll().flatMap(k=>ALL.get(k).map(r=>r.c))])].sort((a,b)=>a.localeCompare(b,'ru'));CL=CATS;
+ const ci=(id,t,v,s)=>`<button class="card cb${iss===id?' sel':''}" data-iss="${id}"><div class="kl">${t}</div><div class="kv">${v}</div><div class="ks">${s}</div></button>`;
+ const SB={};OPR.forEach(r=>{const b=SB[r.c]=SB[r.c]||{},v=subOf(r),y=b[v]=b[v]||{n:0,s:0};y.n++;y.s+=r.a});
+ const subRows=c=>{if(fc!==c)return'';const en=Object.entries(SB[c]||{}).sort((a,b)=>Math.abs(b[1].s)-Math.abs(a[1].s));
+  return en.slice(0,12).map(([v,y])=>`<tr class="cl${fv===v?' sl':''}" data-fv="${esc(v)}"><td style="padding-left:28px;color:var(--ink-500)">${esc(v)}</td><td>${nf.format(y.n)}</td><td class="${y.s<0?'neg':''}">${f(y.s)}</td></tr>`).join('')+(en.length>12?`<tr><td colspan="3" class="mu" style="padding-left:28px">и ещё ${en.length-12}</td></tr>`:'')};
+ const ct=Object.entries(cs).sort((a,b)=>b[1].s-a[1].s).map(([c,x])=>`<tr class="cl${fc===c?' sl':''}" data-fc="${esc(c)}"><td>${fc===c?'▾ ':'▸ '}${esc(c)}</td><td>${nf.format(x.n)}</td><td class="${x.s<0?'neg':''}">${f(x.s)}</td></tr>${subRows(c)}`).join('');
+ const rl=Object.entries(RULES).map(([k,x])=>`<div class="rw" style="grid-template-columns:1fr auto"><span>«${esc(x.n)}»: ${esc(x.f)} → <b>${esc(x.c)}</b></span><button class="btn ec" data-del="${esc(k)}">Удалить</button></div>`).join('')||'<div class="mu">Правил пока нет. Они появляются, когда вы меняете категорию в режиме «менять у всех операций контрагента».</div>';
+ const DETn={};OPR.forEach(r=>{if(!MULTI.has(r.n))return;const d=DETn[r.n]=DETn[r.n]||{},x=d[r.c]=d[r.c]||{n:0,s:0};x.n++;x.s+=r.a});
+ VBYC={};keysAll().forEach(k=>ALL.get(k).forEach(r=>{const v=curVid(r);if(v)(VBYC[r.c]=VBYC[r.c]||new Set()).add(v)}));
+ Object.entries(VIDL).forEach(([c,a])=>a.forEach(v=>(VBYC[c]=VBYC[c]||new Set()).add(v)));
+ let ib='';
+ if(iss==='multi')ib=`<div class="card" id="ib" style="margin-bottom:18px"><h2>Контрагенты в нескольких категориях</h2>${[...MULTI].slice(0,15).map(n=>`<div style="margin:8px 0"><b>${esc(n)}</b><div class="mu">${Object.entries(DETn[n]).map(([c,x])=>esc(c)+': '+nf.format(x.n)+' оп., '+f(x.s)+' тыс. ₽').join('<br>')}</div></div>`).join('')||'<div class="mu">Таких нет.</div>'}<div class="mu">Часто это нормально: например, банк и перечисляет эквайринг, и берёт комиссию. Если это ошибка, найдите операцию в списке ниже и поменяйте категорию.</div></div>`;
+ else if(iss==='sign'){const sc={};OPR.filter(SIGN).forEach(r=>sc[r.c]=(sc[r.c]||0)+1);ib=`<div class="card" id="ib" style="margin-bottom:18px"><h2>Знак суммы не совпадает с категорией</h2><div class="mu">${nS?'Категории с такими операциями: '+Object.entries(sc).map(([c,k])=>esc(c)+' ('+k+')').join(', ')+'. Ниже список этих операций.':'Таких операций нет.'}</div></div>`}
+ else if(iss==='unc')ib=`<div class="card" id="ib" style="margin-bottom:18px"><h2>Операции без категории</h2><div class="mu">${nU?'Выберите для каждой категорию и подкатегорию в списке ниже или создайте новую. В режиме «менять у всех операций контрагента» сайт запомнит выбор для следующих выписок.':'Все операции разнесены по статьям.'}</div></div>`;
+ $('app').innerHTML=`<div class="g">${ci('','Операций за период',nf.format(OPR.length),'Поступления '+M(inc)+' млн ₽, списания '+M(out)+' млн ₽')}${ci('unc','Без категории',nf.format(nU),nU?'Нажмите, чтобы разнести вручную':'Всё распознано')}${ci('multi','Контрагенты в нескольких категориях',MULTI.size,'Нажмите, чтобы увидеть, кто именно')}${ci('sign','Знак суммы не совпадает с категорией',nS,'Например, поступление в расходах')}${ci('man','Исправлено вручную',nM,'Операции с изменённой категорией')}</div>${ib}
+ <div class="two"><div class="card" id="tot"><h2>Итоги по категориям, тыс. ₽</h2><div class="mu" style="margin-bottom:8px">Клик по категории раскроет подкатегории и покажет операции.</div><div class="tw" style="max-height:340px;overflow-y:auto"><table><thead><tr><th>Категория</th><th>Операций</th><th>Сумма</th></tr></thead><tbody>${ct}</tbody></table></div></div>
+ <div class="card"><h2>Ваши правила для следующих выписок</h2>${rl}</div></div>
+ <div class="card" id="opc"><h2>Операции</h2>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><input class="btn" id="q" placeholder="Поиск по контрагенту, назначению, категории, сумме" value="${esc(q)}" style="flex:1;min-width:220px"><select class="btn" id="sc"><option value="all"${sc==='all'?' selected':''}>Менять у всех операций контрагента и в следующих выписках</option><option value="one"${sc==='one'?' selected':''}>Менять только выбранную операцию</option></select><button class="btn" id="rs">Сбросить фильтры</button></div><div id="opl"></div></div>`;
+ document.querySelectorAll('[data-iss]').forEach(b=>b.onclick=()=>{iss=iss===b.dataset.iss?'':b.dataset.iss;lim=100;render();if(iss)setTimeout(()=>{const e=$('ib');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})},60)});
+ const goList=()=>setTimeout(()=>{const e=$('opc');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})},60);
+ document.querySelectorAll('[data-fc]').forEach(r=>r.onclick=()=>{fc=fc===r.dataset.fc?'':r.dataset.fc;fv='';lim=100;render();if(fc)goList()});
+ document.querySelectorAll('[data-fv]').forEach(r=>r.onclick=()=>{fv=fv===r.dataset.fv?'':r.dataset.fv;lim=100;render();goList()});
+ document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{delete RULES[b.dataset.del];try{await saveRules();say('Правило удалено. Уже изменённые операции остались как есть.',0)}catch(e){say('Не удалось удалить правило.',1)}});
+ const scs=$('sc');if(scs)scs.onchange=()=>{sc=scs.value};
+ $('q').oninput=e=>{q=e.target.value;lim=100;paintList()};
+ $('rs').onclick=()=>{q='';fc='';fv='';iss='';lim=100;render()};
+ $('opl').onclick=e=>{const b=e.target.closest('button[data-act]');if(!b)return;const a=b.dataset.act;
+  if(a==='more')lim+=200;else if(a==='top'){const e=$('tot');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});return}else if(a==='addx')adding=null;else if(a==='addok'){addOk();return}
+  paintList()};
+ $('opl').onchange=e=>{const s=e.target.closest('select[data-act]');if(!s)return;const m=s.dataset.m,i=+s.dataset.i,v=s.value;
+  if(v==='__new'){adding={m,i,k:s.dataset.act==='cat'?'c':'v'};paintList();const x=$('an');if(x)x.focus();return}
+  if(s.dataset.act==='cat')applyChange(m,i,{nc:v});else if(v)applyChange(m,i,{nv:v})};
+ paintList()}
+
+/* ---------- Вкладка «Как распознано» ---------- */
+const QL={h:'высокая',m:'средняя',l:'низкая'};
+function qOf(r){if(r.o)return['x','вручную'];if(isUnc(r.c))return['u','не распознано'];if(!r.q)return['x','из файла'];return[r.q,QL[r.q]]}
+function hl(text,w){const t=String(text||'');if(!w)return esc(t);const i=t.indexOf(w);if(i<0)return esc(t);return esc(t.slice(0,i))+'<mark>'+esc(w)+'</mark>'+esc(t.slice(i+w.length))}
+function recView(keys){
+ $('t').textContent='Как сайт разнёс выписку';
+ const ops=[];keys.forEach(k=>ALL.get(k).forEach((r,i)=>ops.push({...r,m:k,i})));
+ const N=ops.length,nU=ops.filter(r=>isUnc(r.c)).length,nM=ops.filter(r=>r.o).length,nAuto=ops.filter(r=>!r.o&&!isUnc(r.c)&&r.q).length;
+ const cq={h:0,m:0,l:0};ops.forEach(r=>{if(!r.o&&!isUnc(r.c)&&cq[r.q]!==undefined)cq[r.q]++});
+ const ci=(id,t,v,s)=>`<button class="card cb${rf===id?' sel':''}" data-rf="${id}"><div class="kl">${t}</div><div class="kv">${v}</div><div class="ks">${s}</div></button>`;
+ // признаки: правило + статья
+ const G={};ops.forEach(r=>{if(!r.k||r.o)return;const g=G[r.k+'|'+r.c]=G[r.k+'|'+r.c]||{c:r.c,n:0,s:0,w:{}};g.n++;g.s+=r.a;const w=String(r.w||'').toLowerCase();g.w[w]=(g.w[w]||0)+1});
+ const gr=Object.values(G).sort((a,b)=>b.n-a.n).map(g=>{const ws=Object.entries(g.w).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>'«'+esc(x[0])+'»').join(', ');
+  return`<tr><td class="wrap">${ws}</td><td>${esc(g.c)}</td><td class="r">${nf.format(g.n)}</td><td class="r ${g.s<0?'neg':''}">${f(g.s)}</td></tr>`}).join('');
+ const qb=(t,v,c)=>`<div class="rw" style="grid-template-columns:110px 1fr 70px"><span>${t}</span><div class="bar"><i style="width:${pc(v,N)}%;${c?'background:'+c:''}"></i></div><b>${nf.format(v)}</b></div>`;
+ $('app').innerHTML=`<div class="g">${ci('','Операций за период',nf.format(N),'Каждую нужно было бы разнести вручную')}${ci('auto','Распознано автоматически',P(pc(nAuto,N)),nf.format(nAuto)+' операций по счёту из 1С, назначению и контрагенту')}${ci('unc','Без категории',nf.format(nU),nU?'Нажмите, чтобы посмотреть':'Незнакомых платежей нет')}${ci('man','Исправлено вручную',nf.format(nM),'Правил запомнено: '+Object.keys(RULES).length)}</div>
+ <div class="two"><div class="card"><h2>Как сайт понимает, куда отнести платёж</h2><ol class="how3">
+  <li><span class="step__n">1</span><span><b>Смотрит на счёт и статью ДДС из 1С.</b> В карточке счёта 51 у каждой оплаты есть корреспондирующий счёт (70 зарплата, 68 налоги, 66 кредит, 62 покупатели) и статья движения денег. Это самый надёжный признак.</span></li>
+  <li><span class="step__n">2</span><span><b>Читает назначение платежа и контрагента.</b> Ищет признаки: «аренда нежилого помещения», «эквайринг», «размещение рекламы», «Яндекс.Облако». В назначении это высокая уверенность, только в названии контрагента средняя.</span></li>
+  <li><span class="step__n">3</span><span><b>Учитывает ваши правки.</b> Если вы перенесли контрагента в другую статью, сайт запомнит это и применит к следующим выпискам. Незнакомое попадает в «без категории».</span></li></ol></div>
+ <div class="card"><h2>Уверенность распознавания</h2>${qb('Высокая',cq.h)}${qb('Средняя',cq.m,'#5B7FD6')}${qb('Низкая',cq.l,'var(--terracotta-500)')}${qb('Вручную',nM,'var(--ink-300)')}${qb('Не распознано',nU,'var(--danger)')}
+  <div class="mu" style="margin-top:10px">Высокая: счёт и статья из 1С или признак в назначении платежа. Средняя: только в названии контрагента. Низкая: общий признак, стоит проверить.</div></div></div>
+ ${gr?`<div class="card" style="margin-bottom:18px"><h2>Признаки, по которым разнесены операции</h2><div class="tw" style="max-height:340px;overflow-y:auto"><table class="lt"><thead><tr><th>Найденный признак</th><th>Статья</th><th class="r">Операций</th><th class="r">Сумма, тыс. ₽</th></tr></thead><tbody>${gr}</tbody></table></div></div>`:''}
+ <div class="card" id="rlc"><h2>Операции и признаки</h2>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><div class="seg">${[['','Все'],['unc','Без категории'],['low','Средняя и низкая'],['man','Вручную']].map(([id,t])=>`<button data-rf2="${id}" class="${rf===id||(id===''&&rf==='auto')?'on':''}">${t}</button>`).join('')}</div><input class="btn" id="rq" placeholder="Поиск по контрагенту, назначению, статье" value="${esc(rq)}" style="flex:1;min-width:200px"></div><div id="rl"></div></div>`;
+ const paint=()=>{const s=rq.trim().toLowerCase();
+  const a=ops.filter(r=>(!rf||rf==='auto'?(rf!=='auto'||(!r.o&&!isUnc(r.c)&&r.q)):rf==='unc'?isUnc(r.c):rf==='man'?!!r.o:(r.q==='m'||r.q==='l')&&!r.o&&!isUnc(r.c))&&(!s||(r.n+' '+(r.p||'')+' '+acctLine(r)+' '+r.c+' '+subOf(r)).toLowerCase().includes(s)));
+  a.sort((x,y)=>x.m<y.m?1:x.m>y.m?-1:y.d-x.d);
+  const tr=a.slice(0,rlim).map(r=>{const[qc,qt]=qOf(r),inP=r.w&&String(r.p||'').includes(r.w),sb=curVid(r);
+   return`<tr${isUnc(r.c)?' class="sl"':''}><td>${fd(r)}</td><td class="wrap">${inP?esc(r.n):hl(r.n,r.w)}</td><td class="wrap">${inP?hl(r.p,r.w):esc(r.p||'')}${acctLine(r)?`<div class="mu" style="color:var(--teal-600)">${r.k==='acc'||String(r.w||'').startsWith('счёт')?'<mark>'+esc(acctLine(r))+'</mark>':esc(acctLine(r))}</div>`:''}</td><td class="r ${r.a<0?'neg':''}">${money(r.a)}</td><td>${isUnc(r.c)?`<button class="btn ec pri" data-pick="${r.m}|${r.i}">Выбрать статью</button>`:esc(r.c)+(sb?`<div class="mu">${esc(sb)}</div>`:'')}</td><td><span class="chip ${qc}">${qt}</span></td></tr>`}).join('');
+  $('rl').innerHTML=`<div class="mu" style="margin-bottom:6px">Найдено операций: ${nf.format(a.length)}</div><div class="tw"><table class="lt"><thead><tr><th>Дата</th><th>Контрагент</th><th>Назначение платежа</th><th class="r">Сумма, ₽</th><th>Статья и подстатья</th><th>Уверенность</th></tr></thead><tbody>${tr||'<tr><td colspan="6" class="empty">Ничего не нашлось</td></tr>'}</tbody></table></div>${a.length>rlim?'<div style="margin-top:10px"><button class="btn" id="rmore">Показать ещё</button></div>':''}`;
+  const rm=$('rmore');if(rm)rm.onclick=()=>{rlim+=200;paint()};
+  document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{const[m,i]=b.dataset.pick.split('|'),r=ALL.get(m)[+i];view='ops';iss='';fv='';fc=r.c;q=r.n;lim=100;render();setTimeout(()=>{const e=$('opc');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})},60)})};
+ document.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>{rf=rf===b.dataset.rf?'':b.dataset.rf;rlim=60;render();setTimeout(()=>{const e=$('rlc');if(e&&rf)e.scrollIntoView({behavior:'smooth',block:'start'})},60)});
+ document.querySelectorAll('[data-rf2]').forEach(b=>b.onclick=()=>{rf=b.dataset.rf2;rlim=60;render()});
+ $('rq').oninput=e=>{rq=e.target.value;rlim=60;paint()};
+ paint()}
+
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const paren=n=>{const m=String(n||'').match(/\(([^)]+)\)\s*$/);return m?m[1].trim():''};
+const subOf=r=>{if(r.s)return r.s;const rv=grp(r.c)==='rev';return TYPES[r.n]||r.v||(rv?r.n:paren(r.n))||(rv?'Без названия':'Без вида')};
+const typeRows=()=>Object.entries(TYPES).map(([n,t])=>({n,t}));
+const SEC=['rev','opex','tax','div','inv','fin','move'];
+function typesPanel(){
+ PL=[];
+ const U={};SEC.forEach(s=>{U[s]={}});
+ for(const k of keysAll())ALL.get(k).forEach(r=>{const g=grp(r.c),u=U[g][r.c]=U[g][r.c]||{n:0,v:{}};u.n++;const v=subOf(r);if(g==='rev'?(r.s||TYPES[r.n]||r.v):v!=='Без вида')u.v[v]=(u.v[v]||0)+1});
+ Object.keys(CATG).forEach(c=>{const g=CATG[c];if(U[g])U[g][c]=U[g][c]||{n:0,v:{}}});
+ Object.entries(VIDL).forEach(([c,a])=>{const g=grp(c);if(!U[g])return;const u=U[g][c]=U[g][c]||{n:0,v:{}};a.forEach(v=>{u.v[v]=u.v[v]||0})});
+ const A=o=>PL.push(o)-1,btn=(o,t,on)=>`<button class="btn ec${on?' on':''}" data-pa="${A(o)}">${t}</button>`;
+ const add=(o,ph,t)=>{const i=A(o);return`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><input class="btn" data-in="${i}" placeholder="${ph}" style="flex:1;min-width:150px"><button class="btn on ec" data-pa="${i}">${t}</button></div>`};
+ const dialog=(items,warn,txt)=>`<div class="card" style="margin:6px 0 10px;box-shadow:none;border-color:${warn?'var(--danger)':'var(--hairline)'}">${warn?`<div class="neg" style="font-size:13px;margin-bottom:8px">${txt}</div>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><input class="btn" id="dn" placeholder="Новое название" style="flex:1;min-width:150px">${items.length?`<select class="btn" id="dr"><option value="">или объединить с существующей</option>${items.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>`:''}</div><div style="margin-top:8px">${btn({a:'ok'},'Применить',1)} ${btn({a:'x'},'Отмена')}</div></div>`;
+ return`<div class="card" style="margin-bottom:18px"><h2>Категории и подкатегории</h2><div class="mu">Разделы отчёта, их категории и подкатегории. Названия можно менять, новые можно добавлять в любом разделе. Переименование применится и к следующим выпискам.</div>
+ ${SEC.map(g=>{const cs=Object.entries(U[g]).sort((a,b)=>a[0].localeCompare(b[0],'ru')),names=cs.map(x=>x[0]);
+  return`<div style="margin:22px 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${esc(GL[g])}</h2>${btn({a:'rs',g},'Переименовать раздел')}${PNL.has(g)?'':'<span class="mu">не входит в прибыль, видно на вкладке «Деньги»</span>'}</div>${dlg&&dlg.k==='s'&&dlg.g===g?dialog([],0,''):''}
+  <div class="g" style="grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))">${cs.map(([c,u])=>{
+   const vs=Object.entries(u.v).sort((a,b)=>a[0].localeCompare(b[0],'ru')),cd=dlg&&dlg.k==='c'&&dlg.c===c;
+   return`<div class="card" style="box-shadow:none;border-color:var(--hairline)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;font-size:16px">${esc(c)}</h2><span>${btn({a:'rc',c},'Переименовать')} ${btn({a:'dc',c},'Удалить')}</span></div>
+   ${u.n?`<div class="mu">${nf.format(u.n)} оп.</div>`:''}
+   ${cd?dialog(names.filter(x=>x!==c),dlg.warn,`«${esc(c)}» уже используется в ${nf.format(u.n)} операциях. Удалять её не стоит, лучше переименуйте или объедините с другой категорией раздела.`):''}
+   ${vs.map(([v,n])=>`<div class="rw" style="grid-template-columns:1fr auto;margin:8px 0"><span>${esc(v)}${n?` <span class="mu">${nf.format(n)} оп.</span>`:''}</span><span>${btn({a:'rv',c,v},'Переименовать')} ${btn({a:'dv',c,v},'Удалить')}</span></div>${dlg&&dlg.k==='v'&&dlg.c===c&&dlg.v===v?dialog(vs.map(x=>x[0]).filter(x=>x!==v),dlg.warn,`«${esc(v)}» уже использовалась в ${nf.format(n)} операциях. Удалять её не стоит, лучше переименуйте или объедините с другой.`):''}`).join('')||'<div class="mu" style="margin:8px 0">Подкатегорий пока нет.</div>'}
+   ${add({a:'av',c},'Добавить подкатегорию','Добавить')}</div>`}).join('')}
+  <div class="card" style="box-shadow:none;border-color:var(--hairline)"><h2 style="margin:0 0 4px;font-size:16px">Новая категория</h2>${add({a:'ac',g},'Название категории','Добавить категорию')}</div></div>`}).join('')}</div>`}
+const usedC=c=>keysAll().some(k=>ALL.get(k).some(r=>r.c===c));
+const usedV=(c,v)=>keysAll().some(k=>ALL.get(k).some(r=>r.c===c&&subOf(r)===v&&(grp(c)!=='rev'||r.s||TYPES[r.n]||r.v)));
+async function renameVid(c,v,w){
+ const ns=new Set(),mods=[];
+ for(const mk of keysAll()){let ch=false;const rows=ALL.get(mk).map(r=>{if(r.c!==c||subOf(r)!==v)return r;if(r.s===v){ch=true;return{...r,s:w}}ns.add(r.n);return r});if(ch)mods.push([mk,rows])}
+ for(const n of ns)TYPES[n]=w;
+ if(ns.size)await persist('types',typeRows());
+ for(const[mk,rows]of mods)await wm(mk,rows);
+ const a=(VIDL[c]||[]).filter(x=>x!==v);if(!a.includes(w))a.push(w);VIDL[c]=a;await persist('vids',vidRows())}
+async function renameCat(c,w){
+ const g=grp(c);CATG[w]=g;delete CATG[c];await persist('cats',catRows());
+ if(VIDL[c]){const a=VIDL[c];delete VIDL[c];VIDL[w]=[...new Set([...(VIDL[w]||[]),...a])];await persist('vids',vidRows())}
+ Object.values(RULES).forEach(x=>{if(x.c===c)x.c=w});await persist('rules',Object.values(RULES));
+ Object.keys(CATMAP).forEach(k=>{if(CATMAP[k]===c)CATMAP[k]=w});CATMAP[c]=w;await persist('catmap',Object.entries(CATMAP).map(([f,c])=>({f,c})));
+ for(const mk of keysAll()){let ch=false;const rows=ALL.get(mk).map(r=>{if(r.c!==c)return r;ch=true;const x=retag(r,w);if(r.v)x.v=r.v;return x});if(ch)await wm(mk,rows)}}
+async function applyDlg(){
+ const d=dlg,dn=$('dn')?$('dn').value.trim():'',dr=$('dr'),w=dn||(dr?dr.value:'');
+ if(!w){say('Впишите новое название или выберите существующее.',1);return}
+ if(w===(d.k==='s'?GL[d.g]:d.k==='c'?d.c:d.v)){say('Новое название должно отличаться от старого.',1);return}
+ try{
+  if(d.k==='s'){GL[d.g]=w;await persist('labels',Object.entries(GL).map(([g,t])=>({g,t})))}
+  else if(d.k==='v')await renameVid(d.c,d.v,w);else await renameCat(d.c,w);
+  dlg=null;say('Сохранено.',0)}
+ catch(e){say('Не удалось сохранить изменение.',1)}}
+async function panelAct(p,i){
+ const e=document.querySelector('#vtp input[data-in="'+i+'"]'),val=e?e.value.trim():'';
+ try{
+  if(p.a==='rs'){dlg={k:'s',g:p.g};render()}
+  else if(p.a==='rc'){dlg={k:'c',c:p.c,warn:false};render()}
+  else if(p.a==='rv'){dlg={k:'v',c:p.c,v:p.v,warn:false};render()}
+  else if(p.a==='dc'){if(usedC(p.c)){dlg={k:'c',c:p.c,warn:true};render()}else{delete CATG[p.c];delete VIDL[p.c];await persist('cats',catRows());await persist('vids',vidRows());say('Категория удалена.',0)}}
+  else if(p.a==='dv'){if(usedV(p.c,p.v)){dlg={k:'v',c:p.c,v:p.v,warn:true};render()}else{VIDL[p.c]=(VIDL[p.c]||[]).filter(x=>x!==p.v);await persist('vids',vidRows());say('Подкатегория удалена.',0)}}
+  else if(p.a==='ok')applyDlg();
+  else if(p.a==='x'){dlg=null;render()}
+  else if(p.a==='ac'){if(!val)return;if(CL.includes(val)||CATG[val]){say('Такая категория уже есть.',1);return}CATG[val]=p.g;await persist('cats',catRows());say('Категория «'+val+'» создана в разделе «'+GL[p.g]+'».',0)}
+  else if(p.a==='av'){if(!val)return;const a=VIDL[p.c]=VIDL[p.c]||[];if(!a.includes(val))a.push(val);await persist('vids',vidRows());say('Подкатегория «'+val+'» создана.',0)}}
+ catch(x){say('Не удалось сохранить изменение.',1)}}
+const OPEN=new Set();
+function aggT(keys){const t={},s={};for(const k of keys)(ALL.get(k)||[]).forEach(r=>{t[r.c]=(t[r.c]||0)+r.a;const sb=subOf(r),m=s[r.c]=s[r.c]||{};m[sb]=(m[sb]||0)+r.a});return{t,s}}
+function sm(t){let R=0,O=0,X=0,D=0;for(const[c,a]of Object.entries(t)){const k=grp(c);if(k==='rev')R+=a;else if(k==='opex')O-=a;else if(k==='tax')X-=a;else if(k==='div')D-=a}return{R,O,E:R-O,X,N:R-O-X,D,K:R-O-X-D}}
+let ALL=new Map(),loaded=false,err='',st={from:null,to:null,auto:true},note='',bad=0,confirmDel=false;
+const keysAll=()=>[...ALL.keys()].filter(k=>ALL.get(k).length).sort();
+
+/* ---------- Разбор файла выписки ---------- */
+function pd(d){
+ if(typeof d==='number'){const x=new Date(Date.UTC(1899,11,30)+Math.floor(d)*864e5);return{y:x.getUTCFullYear(),m:x.getUTCMonth(),d:x.getUTCDate()}}
+ if(d instanceof Date&&!isNaN(d))return{y:d.getFullYear(),m:d.getMonth(),d:d.getDate()};
+ const s=String(d||'').trim();let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return{y:+m[1],m:m[2]-1,d:+m[3]};
+ m=s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4}|\d{2})\b/);if(m)return{y:m[3].length===2?2000+ +m[3]:+m[3],m:m[2]-1,d:+m[1]};return null}
+const num=v=>{if(typeof v==='number')return v;const s=String(v||'').replace(/[\s ₽]/g,'').replace(/[−–]/g,'-').replace(',','.');return s===''?NaN:+s};
+// Находит строку заголовка и колонки: дата, сумма (или дебет/кредит), контрагент, назначение, категория, подкатегория, тип
+// Карточка счёта 51 из 1С: Период | Документ | Аналитика Дт | Аналитика Кт | Дебет (счёт, сумма) | Кредит (счёт, сумма) | Текущее сальдо
+function card1C(A,h,hd){
+ const fi=re=>hd.findIndex(x=>re.test(x));
+ const cD=fi(/^период/),cDoc=fi(/^документ/),cAD=fi(/аналитика\s*дт/),cAK=fi(/аналитика\s*кт/),cDt=fi(/^дебет/),cKt=fi(/^кредит/),cS=fi(/сальдо/);
+ const L=s=>String(s==null?'':s).split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&x!=='<...>');
+ const own=x=>/^51(\.|$)/.test(x),out=[];
+ const bankOf=a=>/\d{20}/.test(a[0]||'')?{bank:a[0],dds:a[1]||''}:{bank:'',dds:a[0]||''};
+ for(const r of A.slice(h+1)){
+  const d0=r[cD];if(!(typeof d0==='number'||/^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(String(d0).trim())))continue;
+  const aD=String(r[cDt]).trim(),aK=String(r[cKt]).trim(),sD=num(r[cDt+1]),sK=num(r[cKt+1]);
+  const doc=L(r[cDoc]),purp=doc.slice(1).join(' '),AD=L(r[cAD]),AK=L(r[cAK]);
+  const sv=cS>=0?num(r[cS+1]):NaN,bal=Number.isFinite(sv)?(/^к/i.test(String(r[cS]).trim())?-sv:sv):NaN;
+  const push=(sum,cp,bk,acc,b)=>{const{bank,dds}=bankOf(bk);let name=cp[0]||'';if(!name)name=/^6[89]/.test(acc)?'Бюджет (налоги)':(dds||'Без контрагента');
+   out.push({date:d0,sum,name,purp,cat:'',sub:'',bal:b,acc,dds,bank})};
+  if(own(aD)&&own(aK)){const v=Number.isFinite(sD)?sD:sK;if(!v)continue;push(v,['Перевод между своими счетами'],AD,'51',NaN);push(-v,['Перевод между своими счетами'],AK,'51',bal)}
+  else if(own(aD)&&Number.isFinite(sD))push(sD,AK,AD,aK,bal);
+  else if(own(aK)&&Number.isFinite(sK))push(-sK,AD,AK,aD,bal)}
+ return out}
+function sheetRows(ws){
+ const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+ for(let h=0;h<Math.min(A.length,30);h++){
+  const hd=A[h].map(x=>String(x).trim().toLowerCase()),fi=re=>hd.findIndex(x=>re.test(x));
+  if(fi(/^период/)>=0&&fi(/^документ/)>=0&&fi(/аналитика\s*дт/)>=0&&fi(/^дебет/)>=0&&fi(/^кредит/)>=0)return card1C(A,h,hd);
+  const cD=fi(/^дата/),cS=fi(/^сумма/),cDe=fi(/^(дебет|списан|расход)/),cCr=fi(/^(кредит|поступ|приход)/);
+  if(cD<0||(cS<0&&(cDe<0||cCr<0)))continue;
+  const cN=fi(/контрагент|получатель|плательщик|наименование/),cP=fi(/назначение/),cC=fi(/^(категория|статья)/),cV=fi(/^(подкатегория|вид)/),cT=fi(/^тип/),cB=fi(/^(остаток|сальдо)/);
+  const out=[];
+  for(const r of A.slice(h+1)){
+   let s=cS>=0?num(r[cS]):(num(r[cCr])||0)-(num(r[cDe])||0);
+   if(cS>=0&&cT>=0&&s>0&&/списан|расход|дебет/i.test(String(r[cT])))s=-s;
+   out.push({date:r[cD],sum:s,name:cN>=0?String(r[cN]).trim():'',purp:cP>=0?String(r[cP]).trim():'',cat:cC>=0?String(r[cC]).trim():'',sub:cV>=0?String(r[cV]).trim():'',bal:cB>=0?num(r[cB]):NaN})}
+  return out}
+ return null}
+function parseRows(rows){const by={};let n=0;
+ for(const r of rows){const s=r.sum,t=pd(r.date);if(isNaN(s)||!s||!t)continue;
+  const mk=t.y+'-'+String(t.m+1).padStart(2,'0');let op;
+  if(r.cat)op={c:r.cat,q:''};
+  else{const x=classify(r.name,r.purp,s,r.acc!==undefined?{acc:r.acc,dds:r.dds}:null);op={c:x.c,q:x.q};if(x.v)op.v=x.v;if(x.k)op.k=x.k;if(x.w)op.w=x.w}
+  if(r.acc)op.x=r.acc;if(r.dds)op.t=r.dds;if(r.bank)op.r=r.bank;
+  const f=op.c,ru=RULES[r.name+'|'+f]||(CATMAP[f]?{c:CATMAP[f]}:null);
+  if(ru&&ru.c!==f){op.o=f;op.c=ru.c;if(!CATMAP[f])delete op.v}
+  (by[mk]=by[mk]||[]).push({d:t.d,...op,a:Math.round(s*100)/100,n:r.name,p:r.purp,...(r.sub?{s:r.sub}:{}),...(Number.isFinite(r.bal)?{b:Math.round(r.bal*100)/100}:{})});n++}
+ return{by,n}}
+function merge(ex,inc){const grpBy=rs=>{const m=new Map();rs.forEach(r=>{const k=key(r);if(!m.has(k))m.set(k,[]);m.get(k).push(r)});return m};
+ const A=grpBy(ex),B=grpBy(inc),out=[...ex];let added=0;
+ for(const[k,l]of B){const have=(A.get(k)||[]).length;if(l.length>have){const e=l.slice(have);out.push(...e);added+=e.length}}
+ return{out,added}}
+function readBook(buf){const wb=XLSX.read(buf,{type:'array'});
+ for(const s of wb.SheetNames){const j=sheetRows(wb.Sheets[s]);if(j&&j.length){const p=parseRows(j);if(p.n)return p}}return null}
+function say(t,b){note=t;bad=b;render()}
+async function upload(file){
+ let p=null;
+ try{p=readBook(await file.arrayBuffer())}catch(e){}
+ if(!p||!p.n){say('Не нашёл в файле операций. Подойдёт карточка счёта 51 из 1С (с группировкой по дням) или таблица с колонками «Дата» и «Сумма» (либо «Дебет» и «Кредит»), желательно ещё «Контрагент» и «Назначение».',1);return}
+ const first=!OWN;if(first){ALL=new Map();OWN=true;LS.set('own',1)}
+ let added=0;
+ for(const[mk,inc]of Object.entries(p.by)){const r=merge(ALL.get(mk)||[],inc);if(!r.added)continue;added+=r.added;ALL.set(mk,r.out)}
+ saveTx();st={from:null,to:null,auto:true};cmpMode='';view='rep';showTypes=false;
+ note=first?'Загружено операций: '+nf.format(added)+'. Пример выписки заменён вашими данными.':'Добавлено новых операций: '+nf.format(added)+'. Уже были загружены: '+nf.format(p.n-added)+'.';bad=0;
+ startAnim(added||p.n);
+ const rep=$('report');if(rep)rep.scrollIntoView({behavior:'smooth',block:'start'})}
+async function resetDemo(){
+ if(!confirmDel){confirmDel=true;setTimeout(()=>{confirmDel=false;render()},5000);render();return}
+ LS.clear();location.hash='report';location.reload()}
+
+/* ---------- График ---------- */
+function chart(g,n,rev,ebit,L,keys){
+ const W=720,H=280,l=36,B=26,T0=14,w=(W-l-6)/n,bw=Math.min(w*.66,56),top=(Math.max(...rev,...ebit,0)||1)*1.1,y=v=>T0+(H-T0-B)*(1-v/top);
+ let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Выручка и операционная прибыль по месяцам">`;
+ for(let k=0;k<=4;k++){const v=top*k/4;s+=`<line x1="${l}" x2="${W}" y1="${y(v)}" y2="${y(v)}" class="gl"/><text x="${l-6}" y="${y(v)+4}" class="ax" text-anchor="end">${Math.round(v/1e6)}</text>`}
+ for(let i=0;i<n;i++){let c=0;const x=l+i*w+(w-bw)/2;
+  g.rev.forEach((r,k)=>{const v=Math.max(0,r.v[i]);s+=`<rect x="${x}" y="${y(c+v)}" width="${bw}" height="${Math.max(0,y(c)-y(c+v))}" rx="2" class="c${k%3}"><title>${esc(r.n)}, ${FULL(keys[i])}: ${M(r.v[i])} млн ₽</title></rect>`;c+=v});
+  if(n<=12||i%Math.ceil(n/12)===0)s+=`<text x="${x+bw/2}" y="${H-8}" class="ax" text-anchor="middle">${L[i]}</text>`}
+ const p=ebit.map((v,i)=>[l+i*w+w/2,y(Math.max(v,0))]);
+ if(n>1)s+=`<polyline points="${p.map(a=>a.join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="2.5"/>`;
+ p.forEach((a,i)=>s+=`<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="#fff" stroke="var(--line)" stroke-width="2"><title>Операционная прибыль, ${FULL(keys[i])}: ${M(ebit[i])} млн ₽</title></circle>`);
+ return s+'</svg>'+`<div class="lg">${g.rev.map((r,k)=>`<span><i style="background:var(--c${k%3})"></i>${esc(r.n)}</span>`).join('')}<span><i style="background:var(--line)"></i>Операционная прибыль</span></div>`}
+
+/* ---------- Выводы словами ---------- */
+function insights(o){
+ const{g,keys,rev,ebit,net,R,E,N,DV,K,n}=o,L=[],med=a=>{const s=[...a].sort((x,y)=>x-y),h=s.length>>1;return s.length%2?s[h]:(s[h-1]+s[h])/2};
+ const mg=pc(E,R);let tr='';
+ if(n>=4){const h=n>>1,m1=pc(sum(ebit.slice(0,h)),sum(rev.slice(0,h))),m2=pc(sum(ebit.slice(n-h)),sum(rev.slice(n-h))),d=m2-m1;
+  tr=Math.abs(d)<1?' Маржа держится ровно весь период.':` Во второй половине периода маржа ${d>0?'выросла':'снизилась'} на ${Math.abs(d).toFixed(1).replace('.',',')} п.п.`}
+ if(R>0)L.push({w:mg<10,h:'Операционная маржа '+P(mg),x:`Из каждых 100 ₽ выручки ${Math.max(0,Math.round(mg))} ₽ остаётся после операционных расходов.${tr}`});
+ const cl=[...g.opex,...g.tax].filter(r=>!isUnc(r.n)).sort((a,b)=>b.t-a.t).slice(0,3);
+ if(cl.length&&R>0)L.push({h:'Куда уходят деньги',x:'Крупнейшие статьи: '+cl.map((r,i)=>`${r.n} ${P(pc(r.t,R))}${i?'':' выручки'}`).join(', ')+'.'});
+ let nsp=0;
+ if(n>=4){const sp=[];g.opex.forEach(r=>{if(isUnc(r.n))return;const md=med(r.v);if(md<=0)return;r.v.forEach((v,i)=>{if(v>1.8*md&&v-md>R/n*.005)sp.push({r,i,v,md,x:v-md})})});
+  nsp=sp.length;sp.sort((a,b)=>b.x-a.x).slice(0,2).forEach(s=>L.push({w:1,h:'Всплеск: '+s.r.n,x:`В ${MP[mo(keys[s.i])]} ${yr(keys[s.i])} ушло ${M(s.v)} млн ₽ при обычных ${M(s.md)} млн ₽, в ${(s.v/s.md).toFixed(1).replace('.',',')} раза больше. Стоит проверить, разовая ли это трата.`}))}
+ const lossI=keys.map((k,i)=>i).filter(i=>ebit[i]<0);
+ if(n>1)L.push(lossI.length?{w:1,h:'Убыточные месяцы: '+lossI.length,x:'Операционный убыток в '+lossI.map(i=>MP[mo(keys[i])]+' '+yr(keys[i])).join(', ')+'.'}:{h:'Убыточных месяцев нет',x:`Операционная прибыль положительная во всех ${n} месяцах периода.`});
+ const cli={};keys.forEach(k=>ALL.get(k).forEach(r=>{if(grp(r.c)==='rev'&&r.a>0&&r.k!=='acq'&&r.k!=='int'&&!isUnc(r.c))cli[r.n]=(cli[r.n]||0)+r.a}));
+ const cv=Object.values(cli).sort((a,b)=>b-a);
+ if(cv.length>=6&&R>0){const t5=pc(sum(cv.slice(0,5)),R);L.push({w:t5>=50,h:'Топ-5 клиентов: '+P(t5)+' выручки',x:`Всего клиентов с оплатой по счёту: ${cv.length}. ${t5<30?'Зависимость от отдельных клиентов низкая: уход одного не обрушит выручку.':t5<50?'Зависимость заметная: стоит следить за крупнейшими клиентами.':'Зависимость высокая: потеря одного клиента сильно ударит по выручке.'}`})}
+ if(DV>0)L.push({h:'Дивиденды: '+M(DV)+' млн ₽',x:`Это ${P(pc(DV,N))} чистой прибыли. В бизнесе осталось ${M(K)} млн ₽.`});
+ let nu=0,su=0;keys.forEach(k=>ALL.get(k).forEach(r=>{if(isUnc(r.c)){nu++;su+=Math.abs(r.a)}}));
+ if(nu)L.push({w:1,h:'Без категории: '+nf.format(nu)+' оп.',x:`Платежи на ${M(su)} млн ₽ сайт не узнал. Разнесите их на вкладке «Как распознано», и отчёт станет точнее.`});
+ L.flags={loss:lossI.length,spikes:nsp,unc:nu,mg};
+ return L}
+
+/* ---------- Главное и водопад ---------- */
+const ICO={g:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+ y:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v6M12 16.5v.01"/></svg>',
+ r:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3l10 18H2z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>'};
+function mainBlock(keys,R,O,N,X,DV,K,E,fl){
+ const why=[];if(fl.mg<15)why.push('маржа ниже 15%');if(fl.loss)why.push('есть убыточные месяцы');if(fl.spikes)why.push('есть всплески расходов');if(fl.unc)why.push('есть операции без категории');
+ const s=E<0?'r':why.length?'y':'g';
+ const T={g:'Бизнес прибыльный и устойчивый',y:'Бизнес в плюсе, но есть на что посмотреть',r:'Бизнес работает в минус'}[s];
+ const S={g:'Прибыль есть в каждом месяце, маржа хорошая, тревожных сигналов в цифрах нет.',y:'Что насторожило: '+why.join(', ')+'. Подробности в блоке «Что видно из цифр».',r:'Расходы больше выручки. Посмотрите в водопаде ниже, какие статьи забирают больше всего денег.'}[s];
+ const x=`${perLabel(keys)} бизнес получил <b>${M(R)} млн ₽</b> от клиентов, потратил на работу <b>${M(O)} млн ₽</b> и ${N>=0?'заработал':'получил'} <b>${M(Math.abs(N))} млн ₽</b> ${N>=0?'прибыли':'убытка'}${X>0?' после налога на прибыль':''}. ${DV>0?`Владельцы забрали <b>${M(DV)} млн ₽</b> дивидендами, в бизнесе осталось <b>${M(K)} млн ₽</b>.`:'Дивиденды не выплачивались, весь результат остался в бизнесе.'}`;
+ const mm=momLine(keys[keys.length-1]),strip=h=>h.replace(/<[^>]+>/g,'');
+ MAIN={s,T,x:strip(x),S,m:mm?strip(mm):''};
+ return`<div class="main main--${s}"><div class="main__light">${ICO[s]}</div><div><div class="main__k">Главное</div><h3 class="main__t">${T}</h3><p class="main__x">${x}</p>${mm?`<p class="main__m">${mm}</p>`:''}<p class="main__s">${S}</p></div></div>`}
+let MAIN=null,WF=[];
+// Короткая сводка по деньгам для PDF руководителю (та же логика, что на вкладке «Деньги»)
+function cashSummary(keys){
+ const ci=cashInfo(),n=keys.length,k0=keys[0],kN=keys[n-1],S={rev:0,op:0,inv:0,fin:0,div:0,move:0},m={};
+ keys.forEach(k=>{let r_=0,o_=0;ALL.get(k).forEach(r=>{const g=grp(r.c),s=g==='rev'?'rev':g==='opex'||g==='tax'?'op':g;S[s]+=r.a;if(s==='rev')r_+=r.a;if(s==='op')o_+=r.a});m[k]=[r_,o_]});
+ const st=ci.start[k0],en=ci.end[kN],avgOut=-S.op/n,ln=Math.min(6,n),avgF=sum(keys.slice(n-ln).map(k=>m[k][0]+m[k][1]))/ln;
+ return{has:ci.has,st,en,run:avgOut>0?en/avgOut:0,avgOut,avgF,proj:en+3*avgF,fin:S.fin,inv:S.inv,div:S.div}}
+const prevKey=k=>{const y=yr(k),m=mo(k);return m?y+'-'+String(m).padStart(2,'0'):(y-1)+'-12'};
+// Последний месяц периода к предыдущему месяцу
+function momLine(lk){
+ const pk=prevKey(lk);if(!ALL.has(pk)||!ALL.get(pk).length)return'';
+ const a=sm(aggT([lk]).t),b=sm(aggT([pk]).t),ch=(x,y)=>y?(x-y)/Math.abs(y)*100:0,yrs=yr(lk)!==yr(pk);
+ const nm=k=>MP[mo(k)]+(yrs?' '+yr(k):''),sp=(v,good)=>`<span class="${Math.abs(v)<.05?'':good?'pos':'neg'}">${v>=.05?'+':''}${P(v)}</span>`;
+ const dr=ch(a.R,b.R),dn=ch(a.N,b.N),dO=ch(a.O,b.O);
+ const cmpTxt=Math.abs(dr)<.05?'столько же, сколько':dr>0?`на <span class="pos">${P(dr)}</span> больше, чем`:`на <span class="neg">${P(-dr)}</span> меньше, чем`;
+ return`В ${nm(lk)} выручка <b>${M(a.R)} млн ₽</b>, ${cmpTxt} в ${nm(pk)}. Прибыль ${M(a.N)} млн ₽ (${sp(dn,dn>=0)}), расходы ${M(a.O)} млн ₽ (${sp(dO,dO<=0)}).`}
+const HOWTO=`<details class="howto"><summary>Как читать этот отчёт</summary><ol>
+ <li><b>Сверху вниз, как деньги текут через бизнес.</b> Сначала выручка, то есть всё, что заплатили клиенты. Из неё вычитаются расходы на работу, получается прибыль. Часть прибыли владельцы забирают дивидендами, остальное остаётся в бизнесе.</li>
+ <li><b>Прибыль и деньги на счёте не одно и то же.</b> Прибыль показывает, сколько бизнес заработал. Сколько денег есть прямо сейчас и на сколько их хватит, смотрите на вкладке «Деньги».</li>
+ <li><b>Значок «?» объясняет термин.</b> Наведите на него мышкой или нажмите на телефоне.</li>
+ <li><b>Детали по клику.</b> Строки таблицы со стрелкой раскрываются до подкатегорий, период выбирается вверху. На вкладках рядом: клиенты, точка безубыточности, план-факт.</li></ol></details>`;
+function waterfall(g,R,N,X,DV,K){
+ const ex=[...g.opex].sort((a,b)=>b.t-a.t),top=ex.slice(0,5),rest=sum(ex.slice(5).map(r=>r.t));
+ const rows=[{t:GL.rev,v:R,tot:1,k:'rev'}];top.forEach(r=>rows.push({t:r.n,v:-r.t}));if(Math.abs(rest)>.5)rows.push({t:'Прочие расходы',v:-rest});
+ if(Math.abs(X)>.5)rows.push({t:GL.tax,v:-X,k:'tax'});rows.push({t:'Прибыль',v:N,tot:1,k:'net'});
+ if(DV>.5){rows.push({t:'Дивиденды',v:-DV,k:'div'});rows.push({t:'Остаётся в бизнесе',v:K,tot:1,k:'keep'})}
+ let cur=0,lo=0,hi=0;const seg=rows.map(r=>{let a,b;if(r.tot){a=0;b=r.v;cur=r.v}else{a=cur;b=cur+r.v;cur=b}lo=Math.min(lo,a,b);hi=Math.max(hi,a,b);return{...r,a,b}});
+ const sc=v=>(v-lo)/((hi-lo)||1)*100;
+ WF=seg.map(r=>({t:r.t,v:r.v,tot:!!r.tot,x0:sc(Math.min(r.a,r.b)),w:Math.abs(sc(r.b)-sc(r.a))}));
+ return`<div class="wf">${seg.map(r=>`<div class="wf__r${r.tot?' tot':''}"><span class="wf__l">${esc(r.t)}${r.k?hint(r.k):''}</span><div class="wf__t"><i class="wf__b${r.v<0&&r.tot?' neg':''}" style="left:${sc(Math.min(r.a,r.b))}%;width:${Math.max(.4,Math.abs(sc(r.b)-sc(r.a)))}%"></i></div><b class="wf__v${r.v<0?' neg':''}">${r.v<0?'−':''}${M(Math.abs(r.v))}</b></div>`).join('')}</div>`}
+
+/* ---------- Анимация разбора выписки ---------- */
+const STILL=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function startAnim(total){
+ if(STILL){FADE=true;render();return}
+ const pool=[];keysAll().forEach(k=>ALL.get(k).forEach(r=>pool.push(r)));
+ ANIM={t0:performance.now(),total,pool,last:0};render();
+ const D1=700,D2=2100,D3=2700;
+ const iv=setInterval(()=>step(performance.now()),40);
+ const step=ts=>{if(!ANIM){clearInterval(iv);return}const t=ts-ANIM.t0,el=id=>$(id);
+  const s=t<D1?1:t<D2?2:t<D3?3:4;
+  ['ps1','ps2','ps3'].forEach((id,i)=>{const e=el(id);if(e)e.className=i+1<s?'done':i+1===s?'on':''});
+  const c1=Math.round(ANIM.total*Math.min(1,t/D1)),c2=Math.round(ANIM.total*Math.max(0,Math.min(1,(t-D1)/(D2-D1))));
+  if(el('pc1'))el('pc1').textContent=nf.format(c1);if(el('pc2'))el('pc2').textContent=nf.format(c2)+' / '+nf.format(ANIM.total);
+  if(el('pbi'))el('pbi').style.width=Math.min(100,t/D3*100)+'%';
+  if(s===2&&t-ANIM.last>130&&ANIM.pool.length&&el('ptk')){ANIM.last=t;const r=ANIM.pool[Math.floor(Math.random()*ANIM.pool.length)];
+   el('ptk').innerHTML=`${esc(r.n)}${r.w?' · признак <mark>'+esc(r.w)+'</mark>':''}<br>→ <b>${esc(r.c)}</b>${curVid(r)?' / '+esc(curVid(r)):''}`}
+  if(s===3&&el('ptk'))el('ptk').innerHTML='Считаю выручку, расходы и прибыль по месяцам, ищу всплески и убыточные месяцы…';
+  if(t>=D3+150){clearInterval(iv);ANIM=null;FADE=true;render()}};
+ step(performance.now())}
+function animCard(){return`<div class="card parse"><h2>Разбираю выписку</h2><ol class="steps">
+ <li id="ps1" class="on"><span class="dot"></span>Читаю выписку<span class="cnt" id="pc1">0</span></li>
+ <li id="ps2"><span class="dot"></span>Раскладываю операции по статьям<span class="cnt" id="pc2"></span></li>
+ <li id="ps3"><span class="dot"></span>Собираю P&amp;L и ищу отклонения</li></ol>
+ <div class="pbar"><i id="pbi"></i></div><div class="ticker" id="ptk">Открываю файл…</div></div>`}
+
+/* ---------- Общая таблица по месяцам с раскрытием ---------- */
+function mtable(keys,rows,first){
+ const H=[];
+ rows.forEach(r=>{const id=first+r.t,has=r.subs&&r.subs.length>1,op=has&&OPEN.has(id),i=RWN.push(id)-1,tot=r.tot!==undefined?r.tot:sum(r.v);
+  H.push(`<tr class="${r.c}${has?' cl':''}"${has?` data-r="${i}"`:''}><td>${has?(op?'▾ ':'▸ '):''}${esc(r.t)}${r.hk?hint(r.hk):''}</td><td class="${tot<0?'neg':''}">${f(tot)}</td>${r.v.map(x=>`<td class="${x<0?'neg':''}">${f(x)}</td>`).join('')}</tr>`);
+  if(op)r.subs.slice().sort((a,b)=>Math.abs(sum(b[1]))-Math.abs(sum(a[1]))).forEach(([sn,sv])=>H.push(`<tr class="sb"><td>${esc(sn)}</td><td class="${sum(sv)<0?'neg':''}">${f(sum(sv))}</td>${sv.map(x=>`<td class="${x<0?'neg':''}">${f(x)}</td>`).join('')}</tr>`))});
+ const multi=yr(keys[0])!==yr(keys[keys.length-1]);
+ return`<div class="tw"><table><thead><tr><th>Статья</th><th>Итого</th>${keys.map(k=>`<th>${MN[mo(k)]}${multi?' '+String(yr(k)).slice(2):''}</th>`).join('')}</tr></thead><tbody>${H.join('')}</tbody></table></div>`}
+const nextKey=k=>{const y=yr(k),m=mo(k)+1;return m>11?(y+1)+'-01':y+'-'+String(m+1).padStart(2,'0')};
+const monthsWord=x=>{const n=Math.abs(Math.round(x));return n%10===1&&n%100!==11?'месяц':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'месяца':'месяцев'};
+
+/* ---------- Деньги: ДДС и прогноз ---------- */
+function cashInfo(){
+ const all=keysAll();let open=null,ki=-1;
+ for(let j=0;j<all.length&&open===null;j++){const rows=ALL.get(all[j]);let bi=-1;
+  rows.forEach((r,i)=>{if(typeof r.b==='number'&&(bi<0||r.d<rows[bi].d))bi=i});
+  if(bi>=0){const r=rows[bi];let before=0;rows.forEach((x,i)=>{if(x.d<r.d||(x.d===r.d&&i<bi))before+=x.a});open=r.b-r.a-before;ki=j}}
+ const has=open!==null;if(!has)open=0;
+ for(let j=0;j<ki;j++)open-=sum(ALL.get(all[j]).map(r=>r.a));
+ const start={},end={};let cur=open;all.forEach(k=>{start[k]=cur;cur+=sum(ALL.get(k).map(r=>r.a));end[k]=cur});
+ return{has,start,end}}
+function cashChart(keys,vals,fk,fv){
+ const all=[...vals,...fv],L=[...keys,...fk],n=L.length,W=720,H=260,l=40,B=26,T0=14,w=(W-l-10)/n;
+ const top=Math.max(...all,0)*1.1||1,bot=Math.min(...all,0)*1.1,y=v=>T0+(H-T0-B)*(top-v)/((top-bot)||1),x=i=>l+i*w+w/2;
+ let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Остаток денег на счёте по месяцам">`;
+ for(let k=0;k<=4;k++){const v=bot+(top-bot)*k/4;s+=`<line x1="${l}" x2="${W}" y1="${y(v)}" y2="${y(v)}" class="gl"/><text x="${l-6}" y="${y(v)+4}" class="ax" text-anchor="end">${Math.round(v/1e6)}</text>`}
+ if(bot<0)s+=`<line x1="${l}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="var(--ink-300)"/>`;
+ const pts=vals.map((v,i)=>[x(i),y(v)]);
+ if(pts.length>1)s+=`<polygon points="${x(0)},${y(Math.max(bot,0))} ${pts.map(p=>p.join(',')).join(' ')} ${x(vals.length-1)},${y(Math.max(bot,0))}" fill="rgba(0,138,170,.10)"/><polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--teal-600)" stroke-width="2.5"/>`;
+ if(fv.length){const fp=[[x(vals.length-1),y(vals[vals.length-1])],...fv.map((v,i)=>[x(vals.length+i),y(v)])];s+=`<polyline points="${fp.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--terracotta-500)" stroke-width="2.5" stroke-dasharray="6 5"/>`;
+  fv.forEach((v,i)=>s+=`<circle cx="${x(vals.length+i)}" cy="${y(v)}" r="4" fill="#fff" stroke="var(--terracotta-500)" stroke-width="2"><title>Прогноз, ${FULL(fk[i])}: ${M(v)} млн ₽</title></circle>`)}
+ pts.forEach((p,i)=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#fff" stroke="var(--teal-600)" stroke-width="2"><title>Остаток на конец, ${FULL(keys[i])}: ${M(vals[i])} млн ₽</title></circle>`);
+ L.forEach((k,i)=>{if(n<=15||i%Math.ceil(n/12)===0)s+=`<text x="${x(i)}" y="${H-8}" class="ax" text-anchor="middle">${MN[mo(k)]}</text>`});
+ return s+'</svg>'}
+function cashView(keys){
+ $('t').textContent='Деньги на счёте';
+ const ci=cashInfo(),n=keys.length,k0=keys[0],kN=keys[n-1],Z=()=>Array(n).fill(0);
+ const B={rev:{},op:{},inv:{},fin:{},div:{},move:{}},S={rev:Z(),op:Z(),inv:Z(),fin:Z(),div:Z(),move:Z()},BK={};
+ keys.forEach((k,i)=>ALL.get(k).forEach(r=>{const g=grp(r.c),s=g==='rev'?'rev':g==='opex'||g==='tax'?'op':g,nm=s==='fin'?subOf(r):r.c;
+  (B[s][nm]=B[s][nm]||Z())[i]+=r.a;S[s][i]+=r.a;
+  if(r.r){const b=BK[r.r]=BK[r.r]||{i:0,o:0,mi:0,mo:0};if(r.a>0)b.i+=r.a;else b.o-=r.a;if(s==='move'){if(r.a>0)b.mi+=r.a;else b.mo-=r.a}}}));
+ const net=keys.map((k,i)=>S.rev[i]+S.op[i]+S.inv[i]+S.fin[i]+S.div[i]+S.move[i]);
+ const st=ci.start[k0],en=ci.end[kN],avgOut=-sum(S.op)/n,run=avgOut>0?en/avgOut:0,ln=Math.min(6,n),avgF=sum(keys.slice(n-ln).map((k,i)=>S.rev[n-ln+i]+S.op[n-ln+i]))/ln;
+ const fk=[],fv=[];let fkk=kN,fb=en;for(let j=0;j<3;j++){fkk=nextKey(fkk);fb+=avgF;fk.push(fkk);fv.push(fb)}
+ const ends=keys.map(k=>ci.end[k]),P=sum(S.rev)+sum(S.op),chg=sum(net);
+ const sub=o=>Object.entries(o),has=s=>S[s].some(x=>Math.abs(x)>.5);
+ RWN=[];
+ const table=mtable(keys,[
+  {t:'Остаток на начало месяца',v:keys.map(k=>ci.start[k]),tot:st,c:'s'},
+  {t:'Пришло от клиентов',v:S.rev,c:'h',subs:sub(B.rev)},
+  {t:'Ушло на текущую работу',v:S.op,c:'h',subs:sub(B.op)},
+  ...(has('inv')?[{t:'Покупка оборудования (инвестиции)',v:S.inv,c:'h',subs:sub(B.inv),hk:'inv'}]:[]),
+  ...(has('fin')?[{t:'Кредиты и займы: получили и вернули',v:S.fin,c:'h',subs:sub(B.fin),hk:'fin'}]:[]),
+  ...(has('div')?[{t:'Выплаты владельцам (дивиденды)',v:S.div,c:'h',subs:sub(B.div),hk:'div'}]:[]),
+  ...(has('move')||Object.keys(B.move).length?[{t:'Переводы между своими счетами',v:S.move,c:'h',subs:sub(B.move),hk:'move'}]:[]),
+  {t:'Чистый поток за месяц',v:net,c:'s'},
+  {t:'Остаток на конец месяца',v:ends,tot:en,c:'s'}],'dds:');
+ const parts=[[sum(S.fin),'кредит','получили больше, чем вернули','вернули больше, чем получили'],[sum(S.inv),'покупка оборудования'],[sum(S.div),'дивиденды'],[sum(S.move),'переводы между счетами']].filter(x=>Math.abs(x[0])>1e3);
+ const why=parts.length?' Разница складывается из движений, которые не попадают в прибыль: '+parts.map(x=>`${x[1]} ${x[0]>0?'+':'−'}${M(Math.abs(x[0]))} млн ₽${x[2]?' ('+(x[0]>0?x[2]:x[3])+')':''}`).join(', ')+'.':'';
+ const banks=Object.entries(BK).sort((a,b)=>(b[1].i+b[1].o)-(a[1].i+a[1].o));
+ const bankCard=banks.length?`<div class="card" style="margin-bottom:18px"><h2>По расчётным счетам</h2><div class="tw"><table class="lt"><thead><tr><th>Расчётный счёт</th><th class="r">Пришло, тыс. ₽</th><th class="r">Ушло, тыс. ₽</th><th class="r">из них переводы между своими, тыс. ₽</th><th class="r">Чистый поток, тыс. ₽</th></tr></thead><tbody>${banks.map(([b,x])=>`<tr><td>${esc(bankShort(b))}<div class="mu">${esc(b)}</div></td><td class="r">${f(x.i)}</td><td class="r">${f(-x.o)}</td><td class="r">${[x.mi?'+'+f(x.mi):'',x.mo?'−'+f(x.mo):''].filter(Boolean).join(' / ')}</td><td class="r ${x.i-x.o<0?'neg':''}">${f(x.i-x.o)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="mu" style="margin-top:8px;line-height:1.55">Карточка счёта 51 из 1С собирает все расчётные счета в одну выгрузку, поэтому общий остаток верный${ci.has?' ('+M(en)+' млн ₽ на конец периода)':''}. Переводы между своими счетами ни доходом, ни расходом не считаются. Остаток по каждому банку отдельно в карточке не виден: для этого в 1С можно сформировать карточку по одному счёту.</div></div>`:'';
+ $('app').innerHTML=`<div class="g">
+  ${ci.has?kc('Деньги на счетах',mln(en),'на конец периода, '+FULL(kN)+'. На начало было '+M(st)+' млн ₽',0,en<0):kc('Чистый поток за период',mln(chg),'В выписке нет остатка, поэтому начальный остаток неизвестен',0,chg<0)}
+  ${ci.has&&run>0?kc('Запас денег',`${run.toFixed(1).replace('.',',')}<small> мес.</small>`,'Столько бизнес продержится без поступлений. Выплаты на работу в среднем '+M(avgOut)+' млн ₽ в месяц','runway'):''}
+  ${!ci.has?'':kc('Прирост денег за период',mln(chg),'Пришло '+M(keys.reduce((s,k)=>s+sum(ALL.get(k).filter(r=>r.a>0&&grp(r.c)!=='move').map(r=>r.a)),0))+', ушло '+M(-keys.reduce((s,k)=>s+sum(ALL.get(k).filter(r=>r.a<0&&grp(r.c)!=='move').map(r=>r.a)),0))+' млн ₽ без переводов между счетами',0,chg<0)}
+  ${kc('Средний прирост в месяц',mln(avgF),'От текущей работы за последние '+ln+' мес., без кредитов, покупок оборудования и дивидендов',0,avgF<0)}</div>
+ <div class="two"><div class="card"><h2>Остаток на счетах и прогноз на 3 месяца, млн ₽${hint('forecast')}</h2>${cashChart(keys,ends,fk,fv)}
+  <div class="lg"><span><i style="background:var(--teal-600)"></i>Остаток на конец месяца</span><span><i style="background:var(--terracotta-500)"></i>Прогноз по текущей работе</span></div>
+  <div class="mu" style="margin-top:8px">${ci.has?`За период остаток ${en>=st?'вырос':'снизился'} с ${M(st)} до ${M(en)} млн ₽. `:''}Если текущая работа пойдёт как в последние месяцы, к ${MD[mo(fk[2])]} ${yr(fk[2])} ${ci.has?`на счетах будет около ${M(fv[2])} млн ₽`:`прирост составит ${M(fv[2]-en)} млн ₽`}.</div></div>
+ <div class="card"><h2>Почему прибыль не равна деньгам на счёте</h2>
+  <p style="margin:0 0 10px;line-height:1.55">Прибыль показывает, сколько бизнес заработал. Деньги на счёте показывают, сколько у него есть прямо сейчас.</p>
+  <p style="margin:0 0 10px;line-height:1.55">${perLabel(keys)} прибыль ${M(P)} млн ₽, а деньги на счетах ${chg>=0?'выросли':'уменьшились'} на ${M(Math.abs(chg))} млн ₽.${why}</p>
+  <p class="mu" style="margin:0;line-height:1.55">Кредит увеличивает деньги, но это не доход: его придётся вернуть. Ноутбуки и оборудование забирают деньги сразу, а в расходы попадают постепенно, через амортизацию. Дивиденды уходят владельцам из уже заработанной прибыли.</p></div></div>
+ ${bankCard}
+ <div class="card"><h2>Движение денег по месяцам (ДДС), тыс. ₽${hint('dds')}</h2><div class="mu" style="margin:-6px 0 10px">Строки со стрелкой раскрываются по клику.</div>${table}</div>`}
+
+/* ---------- Клиенты ---------- */
+function cliView(keys){
+ $('t').textContent='Клиенты';
+ const all=keysAll(),C={},ks=new Set(keys);let Rtot=0,acq=0;
+ all.forEach(k=>ALL.get(k).forEach(r=>{if(grp(r.c)!=='rev'||r.a<=0||isUnc(r.c))return;const inP=ks.has(k);if(inP)Rtot+=r.a;
+  if(r.k==='acq'||r.k==='int'||/эквайринг/i.test(r.n)){if(inP&&r.k!=='int')acq+=r.a;return}
+  const c=C[r.n]=C[r.n]||{n:r.n,first:k,last:'',sel:0,cnt:0,ms:new Set(),all:0};const ld=k+'-'+String(r.d).padStart(2,'0');
+  if(k<c.first)c.first=k;if(ld>c.last)c.last=ld;c.all+=r.a;if(inP){c.sel+=r.a;c.cnt++;c.ms.add(k)}}));
+ const list=Object.values(C).filter(c=>c.sel>0).sort((a,b)=>b.sel-a.sel);
+ if(!list.length){$('app').innerHTML='<div class="card empty">За этот период не нашлось оплат от клиентов по счёту. Если клиенты платят картой, их деньги приходят через эквайринг одной суммой и поимённо не видны.</div>';return}
+ const S=sum(list.map(c=>c.sel)),cnt=sum(list.map(c=>c.cnt));let cum=0;
+ list.forEach(c=>{c.sh=c.sel/S*100;c.g=cum<80?'A':cum<95?'B':'C';cum+=c.sh;c.cum=cum});
+ const nA=list.filter(c=>c.g==='A').length,t5=pc(sum(list.slice(0,5).map(c=>c.sel)),Rtot);
+ const lastK=all[all.length-1],cut=all.length>=3?all[all.length-3]:null;
+ const lost=cut?Object.values(C).filter(c=>c.last.slice(0,7)<=cut).sort((a,b)=>b.all-a.all):[];
+ const nw=keys.map(k=>k===all[0]?null:Object.values(C).filter(c=>c.first===k).length),ls=keys.map(k=>cut&&k<=cut?Object.values(C).filter(c=>c.last.slice(0,7)===k).length:0);
+ const mx=Math.max(1,...nw.map(x=>x||0),...ls),W=720,H=200,l=30,mid=H/2,w=(W-l-6)/keys.length,bw=Math.min(w*.5,30),hy=v=>v/mx*(mid-26);
+ let ch=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Новые и пропавшие клиенты по месяцам"><line x1="${l}" x2="${W}" y1="${mid}" y2="${mid}" class="gl"/>`;
+ keys.forEach((k,i)=>{const x=l+i*w+(w-bw)/2,a=nw[i]||0,b=ls[i];
+  if(a)ch+=`<rect x="${x}" y="${mid-hy(a)}" width="${bw}" height="${hy(a)}" rx="2" fill="var(--teal-600)"><title>${FULL(k)}: новых ${a}</title></rect><text x="${x+bw/2}" y="${mid-hy(a)-4}" class="ax" text-anchor="middle">${a}</text>`;
+  if(b)ch+=`<rect x="${x}" y="${mid}" width="${bw}" height="${hy(b)}" rx="2" fill="var(--terracotta-500)"><title>${FULL(k)}: последняя оплата у ${b} клиентов</title></rect><text x="${x+bw/2}" y="${mid+hy(b)+12}" class="ax" text-anchor="middle">${b}</text>`;
+  ch+=`<text x="${x+bw/2}" y="${H-4}" class="ax" text-anchor="middle">${MN[mo(k)]}</text>`});
+ ch+='</svg>';
+ const fdk=s=>s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4);
+ const chip={A:'h',B:'m',C:'x'};
+ const rows=(cliAll?list:list.slice(0,25)).map((c,i)=>`<tr><td>${i+1}. ${esc(c.n)}</td><td class="r">${f(c.sel)}</td><td class="r">${P(c.sh)}</td><td class="r">${P(c.cum)}</td><td><span class="chip ${chip[c.g]}">${c.g}</span></td><td class="r">${c.ms.size}</td><td>${fdk(c.last)}</td></tr>`).join('');
+ $('app').innerHTML=`<div class="g">${kc('Клиентов с оплатами',nf.format(list.length),'за период, по оплатам на расчётный счёт')}${kc('Средний чек',`${f(S/cnt)}<small> тыс. ₽</small>`,nf.format(cnt)+' '+(cnt%10===1&&cnt%100!==11?'оплата':cnt%10>=2&&cnt%10<=4&&(cnt%100<10||cnt%100>=20)?'оплаты':'оплат')+' за период')}${kc('Топ-5 клиентов',P(t5),'всей выручки бизнеса')}${kc('Группа A',nf.format(nA),'клиентов приносят 80% выручки от оплат по счёту','abc')}</div>
+ ${acq>0?`<div class="card" style="margin-bottom:18px;box-shadow:none;background:var(--cyan-100)"><div style="line-height:1.55">Ещё ${M(acq)} млн ₽ пришло через эквайринг: это клиенты, которые платят картой. Банк перечисляет их деньги одной суммой, поэтому поимённо здесь они не видны.</div></div>`:''}
+ <div class="two"><div class="card"><h2>Новые и пропавшие клиенты</h2>${ch}<div class="lg"><span><i style="background:var(--teal-600)"></i>Новые: первая оплата в этом месяце</span><span><i style="background:var(--terracotta-500)"></i>Пропавшие: последняя оплата в этом месяце, потом 2 и больше месяцев тишины</span></div></div>
+ <div class="card"><h2>Пропавшие клиенты</h2>${lost.length?`<div class="tw" style="max-height:300px;overflow-y:auto"><table class="lt"><thead><tr><th>Клиент</th><th>Последняя оплата</th><th class="r">Всего, тыс. ₽</th></tr></thead><tbody>${lost.map(c=>`<tr><td>${esc(c.n)}</td><td>${fdk(c.last)}</td><td class="r">${f(c.all)}</td></tr>`).join('')}</tbody></table></div><div class="mu" style="margin-top:8px">Стоит узнать у них, почему перестали платить.</div>`:'<div class="mu" style="line-height:1.55">Пропавших нет: все, кто платил раньше, платили и в последние 2 месяца.</div>'}</div></div>
+ <div class="card"><h2>Кто приносит выручку: ABC-анализ${hint('abc')}</h2><div class="mu" style="margin:-6px 0 10px">Доля считается от выручки по оплатам на расчётный счёт.</div><div class="tw"><table class="lt"><thead><tr><th>Клиент</th><th class="r">Выручка, тыс. ₽</th><th class="r">Доля</th><th class="r">Накопленная доля</th><th>Группа</th><th class="r">Месяцев с оплатами</th><th>Последняя оплата</th></tr></thead><tbody>${rows}</tbody></table></div>${list.length>25?`<div style="margin-top:10px"><button class="btn" id="cla">${cliAll?'Свернуть':'Показать всех ('+list.length+')'}</button></div>`:''}</div>`;
+ const b=$('cla');if(b)b.onclick=()=>{cliAll=!cliAll;render()}}
+
+/* ---------- Точка безубыточности ---------- */
+function beView(keys){
+ $('t').textContent='Точка безубыточности';
+ const n=keys.length,cs={},rm=Array(n).fill(0);let R=0;
+ keys.forEach((k,i)=>ALL.get(k).forEach(r=>{const g=grp(r.c);if(g==='rev'){R+=r.a;rm[i]+=r.a}else if(g==='opex')cs[r.c]=(cs[r.c]||0)-r.a}));
+ const isVar=c=>FIXVAR[c]?FIXVAR[c]==='v':VARDEF.has(c);
+ const rows=Object.entries(cs).filter(([,v])=>Math.abs(v)>.5).sort((a,b)=>b[1]-a[1]),tot=sum(rows.map(x=>x[1]));
+ const F=sum(rows.filter(([c])=>!isVar(c)).map(x=>x[1]))/n,V=sum(rows.filter(([c])=>isVar(c)).map(x=>x[1]))/n,Rm=R/n,vr=Rm>0?V/Rm:1;
+ const ok=vr<1&&Rm>0,BE=ok?F/(1-vr):Infinity,saf=ok?(Rm-BE)/Rm*100:-100,above=ok?rm.filter(x=>x>=BE).length:0;
+ const mx=Math.max(Rm,ok?BE:0)*1.15||1;
+ const txt=!ok?'Переменные расходы съедают всю выручку, поэтому точку безубыточности посчитать нельзя: при любых продажах бизнес в минусе.':saf>=0?`Чтобы покрыть все расходы, бизнесу нужно <b>${M(BE)} млн ₽</b> выручки в месяц. Сейчас в среднем <b>${M(Rm)} млн ₽</b>. Выручка может упасть на <b>${P(saf)}</b>, и бизнес всё ещё не уйдёт в минус.`:`Сейчас выручка ниже точки безубыточности: до нуля не хватает <b>${M(BE-Rm)} млн ₽</b> в месяц.`;
+ $('app').innerHTML=`<div class="g">${kc('Точка безубыточности',ok?mln(BE):'нет','выручка в месяц, при которой бизнес в нуле','be')}${kc('Запас прочности',ok?P(saf):'нет','на столько может упасть выручка до минуса','safety',saf<0)}${kc('Постоянные расходы',mln(F),'в среднем в месяц','fixvar')}${kc('Переменные расходы',P(vr*100),'от выручки, в среднем '+M(V)+' млн ₽ в месяц','fixvar')}</div>
+ <div class="card" style="margin-bottom:18px"><h2>Где бизнес сейчас</h2>${ok?`<div class="scale"><div class="scale__fill" style="width:${Rm/mx*100}%"></div><div class="scale__mark" style="left:${BE/mx*100}%"><span>Точка нуля: ${M(BE)} млн ₽</span></div><div class="scale__now" style="left:${Rm/mx*100}%"><span>Вы сейчас: ${M(Rm)} млн ₽</span></div></div>`:''}
+  <p class="main__x" style="font-size:16px">${txt}</p>${ok&&n>1?`<p class="mu" style="margin:8px 0 0">В ${above} из ${n} ${monthsWord(n)==='месяц'?'месяца':'месяцев'} выручка была выше точки безубыточности.</p>`:''}</div>
+ <div class="two"><div class="card"><h2>Какие расходы постоянные, а какие переменные${hint('fixvar')}</h2><div class="mu" style="margin:-6px 0 10px">Нажмите, чтобы поменять тип расхода. Точка пересчитается сразу.</div><div class="tw"><table class="lt"><thead><tr><th>Статья</th><th class="r">В месяц, тыс. ₽</th><th class="r">Доля</th><th>Тип</th></tr></thead><tbody>
+  ${rows.map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r">${f(v/n)}</td><td class="r">${P(pc(v,tot))}</td><td><div class="seg"><button data-fx="${esc(c)}|f" class="${isVar(c)?'':'on'}">Постоянный</button><button data-fx="${esc(c)}|v" class="${isVar(c)?'on':''}">Переменный</button></div></td></tr>`).join('')}</tbody></table></div></div>
+ <div class="card"><h2>Как это считается</h2><ol class="how3">
+  <li><span class="step__n">1</span><span><b>Постоянные расходы</b> бизнес платит, даже если продаж нет: зарплата, аренда, сервисы.</span></li>
+  <li><span class="step__n">2</span><span><b>Переменные</b> растут вместе с продажами: реклама, подрядчики, комиссии. Их считаем долей от выручки.</span></li>
+  <li><span class="step__n">3</span><span><b>Точка безубыточности</b> = постоянные расходы ÷ (1 − доля переменных). При такой выручке всё покрыто, но прибыли ещё нет.</span></li></ol>
+  <p class="mu" style="margin:12px 0 0;line-height:1.55">Налог на прибыль и дивиденды в расчёт не входят. Если в вашем бизнесе есть закупка товара, отметьте её как переменный расход.</p></div></div>`;
+ document.querySelectorAll('[data-fx]').forEach(b=>b.onclick=()=>{const[c,t]=b.dataset.fx.split('|');FIXVAR[c]=t;LS.set('cfg/fixvar',FIXVAR);DIRTY=true;render()})}
+
+/* ---------- План-факт ---------- */
+function pfView(keys){
+ $('t').textContent='План-факт';
+ const all=keysAll(),nA=all.length,n=keys.length,avg={},fact={},fm={},sg=c=>grp(c)==='rev'?1:-1;
+ const PF=r=>['rev','opex','tax'].includes(grp(r.c));
+ all.forEach(k=>ALL.get(k).forEach(r=>{if(!PF(r))return;avg[r.c]=(avg[r.c]||0)+sg(r.c)*r.a/nA}));
+ keys.forEach((k,i)=>ALL.get(k).forEach(r=>{if(!PF(r))return;fact[r.c]=(fact[r.c]||0)+sg(r.c)*r.a;(fm[r.c]=fm[r.c]||Array(n).fill(0))[i]+=sg(r.c)*r.a}));
+ const pl=c=>PLAN[c]!==undefined?PLAN[c]:(avg[c]||0);
+ const cats=Object.keys(avg).filter(c=>Math.abs(avg[c])>.5||PLAN[c]!==undefined),byG=g=>cats.filter(c=>grp(c)===g).sort((a,b)=>pl(b)-pl(a));
+ const cls=(rev,fa,pa)=>{if(!pa)return'';const d=(fa-pa)/Math.abs(pa)*100;return(rev?d<-10:d>10)?'bad':(rev?d>10:d<-10)?'good':''};
+ const bar=(fa,pa,k)=>`<div class="pfbar ${k}"><i style="width:${pa?Math.min(150,Math.max(0,fa/pa*100))/1.5:0}%"></i><s></s></div>`;
+ const line=(t,fa,pa,rev,inp,b)=>{const d=fa-pa,k=cls(rev,fa,pa),dp=pa?d/Math.abs(pa)*100:0;return`<tr${b?' class="s"':''}><td>${t}</td><td class="r">${inp||''}</td><td class="r">${f(pa)}</td><td class="r">${f(fa)}</td><td class="r ${k}">${Math.round(d/1e3)>0?'+':''}${f(d)}</td><td class="r ${k}">${pa?(dp>=.05?'+':'')+P(dp):''}</td><td>${bar(fa,pa,k)}</td></tr>`};
+ const inp=c=>`<input class="btn ec pin" type="number" min="0" step="1" inputmode="numeric" data-pc="${esc(c)}" value="${Math.round(pl(c)/1e3)}" aria-label="План в месяц, тыс. ₽: ${esc(c)}">`;
+ const tf=g=>sum(byG(g).map(c=>fact[c]||0)),tp=g=>sum(byG(g).map(c=>pl(c)*n));
+ const fr=tf('rev'),pr=tp('rev'),fe=tf('opex')+tf('tax'),pe=tp('opex')+tp('tax');
+ let body=`<tr class="h"><td colspan="7">${esc(GL.rev)}</td></tr>`+byG('rev').map(c=>line(esc(c),fact[c]||0,pl(c)*n,1,inp(c))).join('')+line('Выручка всего',fr,pr,1,'',1)+
+  `<tr class="h"><td colspan="7">${esc(GL.opex)}</td></tr>`+[...byG('opex'),...byG('tax')].map(c=>line(esc(c),fact[c]||0,pl(c)*n,0,inp(c))).join('')+line('Расходы всего',fe,pe,0,'',1)+line('Операционная прибыль',fr-fe,pr-pe,1,'',1);
+ const over=[...byG('opex'),...byG('tax')].map(c=>({c,d:(fact[c]||0)-pl(c)*n,p:pl(c)?((fact[c]||0)/(pl(c)*n)-1)*100:0})).filter(x=>x.p>10&&x.d>0).sort((a,b)=>b.d-a.d).slice(0,3);
+ const sumTxt=`${perLabel(keys)} выручка составила <b>${P(pc(fr,pr))}</b> от плана, расходы <b>${P(pc(fe,pe))}</b> от плана. ${over.length?'Сильнее всего план превышен по статьям: '+over.map(x=>`${esc(x.c)} (+${M(x.d)} млн ₽, +${Math.round(x.p)}%)`).join(', ')+'.':'Ни одна статья расходов не вышла за план больше чем на 10%.'}${n===nA&&!Object.keys(PLAN).length?' <span class="mu" style="font-size:14px">План по умолчанию равен среднему за все месяцы, поэтому за весь период факт с ним совпадает. Выберите месяц вверху или впишите свой план, а отклонения по месяцам видны в таблице ниже.</span>':''}`;
+ const hc=(rev,fa,pa)=>{if(!pa)return['',''];const d=(fa-pa)/Math.abs(pa)*100,bad=rev?-d:d,a=Math.abs(d),lv=a>50?3:a>25?2:1;return[a<=10?'':(bad>0?'b':'g')+lv,(Math.round(d)>0?'+':'')+(Math.round(d)||0)+'%']};
+ const heat=n>1?`<div class="card"><h2>Отклонения по месяцам</h2><div class="mu" style="margin:-6px 0 10px">Сравнение каждого месяца с планом на месяц. Красное хуже плана больше чем на 10%, зелёное лучше.</div><div class="tw"><table class="hm"><thead><tr><th>Статья</th>${keys.map(k=>`<th>${MN[mo(k)]}</th>`).join('')}</tr></thead><tbody>${[...byG('rev'),...byG('opex'),...byG('tax')].map(c=>`<tr><td>${esc(c)}</td>${(fm[c]||Array(n).fill(0)).map(v=>{const[k,t]=hc(grp(c)==='rev',v,pl(c));return`<td class="${k}">${t}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>
+  <div class="lgd"><span><i style="background:#F5C6BF"></i>хуже плана</span><span><i style="background:#BFE6D5"></i>лучше плана</span><span><i style="background:#fff;border:1px solid var(--hairline)"></i>в пределах 10%</span></div></div>`:'';
+ $('app').innerHTML=`<div class="card" style="margin-bottom:18px"><p class="main__x" style="font-size:16px;margin:0">${sumTxt}</p></div>
+ <div class="card" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><h2 style="margin:0">План и факт за период, тыс. ₽${hint('plan')}</h2><button class="btn" id="pfr">Вернуть средние</button></div>
+ <div class="mu" style="margin-bottom:10px">Впишите свой план на месяц в тыс. ₽, он сохранится в этом браузере. Черта на полоске это план, полоска это факт.</div>
+ <div class="tw"><table class="lt"><thead><tr><th>Статья</th><th class="r">План в месяц</th><th class="r">План за период</th><th class="r">Факт</th><th class="r">Отклонение</th><th class="r">%</th><th>Факт к плану</th></tr></thead><tbody>${body}</tbody></table></div></div>${heat}`;
+ document.querySelectorAll('[data-pc]').forEach(i=>i.onchange=()=>{const v=parseFloat(String(i.value).replace(',','.'));if(isNaN(v))delete PLAN[i.dataset.pc];else PLAN[i.dataset.pc]=v*1e3;LS.set('cfg/plan',PLAN);DIRTY=true;render()});
+ const pr_=$('pfr');if(pr_)pr_.onclick=()=>{PLAN={};LS.set('cfg/plan',PLAN);render()}}
+
+/* ---------- Отрисовка ---------- */
+function draw(){
+ const all=keysAll(),n0=all.length,adm=$('adm'),per=$('per'),app=$('app');
+ let tot=0,nU=0;all.forEach(k=>{tot+=ALL.get(k).length;ALL.get(k).forEach(r=>{if(isUnc(r.c))nU++})});
+ adm.innerHTML=`<label class="btn pri">Загрузить выписку<input type="file" id="f" accept=".xlsx,.xls,.csv" hidden></label><a class="btn" href="${TEMPLATE_URL}" download="${TEMPLATE_NAME}">Скачать пример карточки 51</a><a class="btn" href="#how" data-open-how>Как выгрузить из своей 1С${hint('card51')}</a>${n0&&!ANIM?`<button class="btn${showTypes?' on':''}" id="vt">Категории и подкатегории</button>`:''}${DIRTY?`<button class="btn" id="clr">${confirmDel?'Точно вернуть пример?':'Вернуть пример'}</button>`:''}<div id="msg" class="${bad?'':'pos'}">${esc(note)}</div>`;
+ $('rt').lastChild.textContent=OWN?'Отчёт по вашей выписке':'Отчёт по выписке-примеру';
+ $('vtp').innerHTML=showTypes&&!ANIM?typesPanel():'';
+ const tb=$('tabs');tb.hidden=!n0||!!ANIM;
+ tb.innerHTML=[['rep','Отчёт'],['cash','Деньги'],['cli','Клиенты'],['be','Безубыточность'],['pf','План-факт'],['rec','Как распознано'+(nU?' ('+nU+')':'')],['ops','Проверка операций']].map(([v,t])=>`<button class="${view===v?'on':''}" data-t="${v}">${t}</button>`).join('');
+ const lk=all[n0-1],ld=n0?Math.max(...ALL.get(lk).map(r=>r.d)):0,ldt=n0?String(ld).padStart(2,'0')+'.'+lk.slice(5)+'.'+lk.slice(0,4):'';
+ $('meta').textContent=err||(!loaded?'Загружаю пример выписки…':n0?`${OWN?'Ваша выписка':'Пример: карточка счёта 51 из 1С, ООО «Облачные решения»'}: ${nf.format(tot)} операций, последняя от ${ldt}.${DIRTY&&!OWN?' С вашими правками.':''} Данные хранятся только в этом браузере.`:'Данных пока нет.');
+ if(n0&&!ANIM){const auto=pc(tot-nU,tot),cats=new Set();all.forEach(k=>ALL.get(k).forEach(r=>{if(!isUnc(r.c)&&PNL.has(grp(r.c)))cats.add(r.c)}));
+  $('hk1').textContent=nf.format(tot);$('hk2').textContent=Math.floor(auto)+'%';$('hk3').innerHTML=cats.size+' <small>статей</small>';$('hk3l').textContent='P&L за '+n0+' '+(n0%10===1&&n0%100!==11?'месяц':n0%10>=2&&n0%10<=4&&(n0%100<10||n0%100>=20)?'месяца':'месяцев')}
+ if(ANIM){per.innerHTML='';app.innerHTML=animCard();return}
+ if(!loaded||!n0){per.innerHTML='';$('t').textContent='Управленческий P&L';
+  app.innerHTML=loaded?`<div class="card empty">${err?'Пример выписки не загрузился. ':'Данных пока нет. '}Нажмите «Загрузить выписку» и выберите карточку счёта 51 из 1С.</div>`:'';return}
+ if(st.auto||!all.includes(st.from)||!all.includes(st.to)){st.from=all[0];st.to=lk}
+ const keys=all.filter(k=>k>=st.from&&k<=st.to),n=keys.length;
+ const mi=k=>yr(k)*12+mo(k),mkk=x=>Math.floor(x/12)+'-'+String(x%12+1).padStart(2,'0');
+ let pt=null,pm=null,cmp=false,cnote='';
+ if(cmpMode&&view==='rep'){const a0=mi(keys[0]),sp=mi(keys[n-1])-a0+1,b=cmpMode==='yoy'?a0-12:a0-sp,pk=Array.from({length:sp},(_,i)=>mkk(b+i)),have=pk.filter(k=>ALL.has(k)&&ALL.get(k).length).length;
+  if(have){cmp=true;pt=aggT(pk);pm=sm(pt.t);if(have<sp)cnote='За период сравнения данные есть за '+have+' из '+sp+' мес.'}else cnote='Нет данных за период сравнения'}
+ const lbl=cmpMode==='yoy'?'к тому же периоду год назад':'к прошлому периоду';
+ const opt=s=>all.map(k=>`<option value="${k}"${k===s?' selected':''}>${FULL(k)}</option>`).join('');
+ const act=m=>m?(st.from===all[Math.max(0,n0-m)]&&st.to===lk):(st.from===all[0]&&st.to===lk);
+ per.innerHTML=`<span class="mu">Период:</span><select class="btn" id="pf">${opt(st.from)}</select><span class="mu">по</span><select class="btn" id="pt">${opt(st.to)}</select>${[['Весь период',0],['Последний месяц',1],['3 мес.',3],['6 мес.',6]].map(([l,m])=>`<button class="btn${act(m)?' on':''}" data-n="${m}">${l}</button>`).join('')}${view==='rep'?`<span class="mu">Сравнить:</span><select class="btn" id="cm"><option value="">без сравнения</option><option value="prev"${cmpMode==='prev'?' selected':''}>с прошлым периодом</option><option value="yoy"${cmpMode==='yoy'?' selected':''}>с годом ранее</option></select><button class="btn" data-x="pdf">Сохранить в PDF</button><button class="btn" data-x="xlsx">Сохранить в Excel</button>`:''}<span class="mu" id="cn"></span>`;$('cn').textContent=cnote;
+ app.classList.toggle('fadein',FADE);if(FADE){FADE=false;setTimeout(()=>app.classList.remove('fadein'),800)}
+ if(view==='ops'){opsView(keys);return}
+ if(view==='rec'){recView(keys);return}
+ if(view==='cash'){cashView(keys);return}
+ if(view==='cli'){cliView(keys);return}
+ if(view==='be'){beView(keys);return}
+ if(view==='pf'){pfView(keys);return}
+ const multi=yr(keys[0])!==yr(keys[n-1]),L=keys.map(k=>MN[mo(k)]+(multi?' '+String(yr(k)).slice(2):''));
+ $('t').textContent=n===1?'Финансовый результат за '+FULL(keys[0]):'Финансовый результат с '+MG[mo(keys[0])]+(multi?' '+yr(keys[0]):'')+' по '+FULL(keys[n-1]);
+ const cats={},SUBM={};
+ keys.forEach((k,i)=>ALL.get(k).forEach(r=>{(cats[r.c]=cats[r.c]||Array(n).fill(0))[i]+=r.a;const sb=subOf(r),m=SUBM[r.c]=SUBM[r.c]||{};(m[sb]=m[sb]||Array(n).fill(0))[i]+=r.a}));
+ const mkSubs=(c,sgn)=>{let a=Object.entries(SUBM[c]||{}).map(([t,v])=>({t,v:v.map(x=>x*sgn),p:pt?sgn*((pt.s[c]||{})[t]||0):undefined}));
+  a.sort((x,y)=>sum(y.v)-sum(x.v));
+  if(a.length>9){const rs=a.slice(8);a=a.slice(0,8);a.push({t:'Остальные ('+rs.length+')',v:keys.map((_,i)=>sum(rs.map(r=>r.v[i]))),p:pt?sum(rs.map(r=>r.p)):undefined})}
+  return a};
+ const g={rev:[],opex:[],tax:[],div:[]};
+ for(const[c,a]of Object.entries(cats)){const k=grp(c);if(!g[k])continue;const sgn=k==='rev'?1:-1,v=a.map(x=>x*sgn);g[k].push({n:c,v,t:sum(v),p:pt?sgn*(pt.t[c]||0):undefined,subs:mkSubs(c,sgn)})}
+ for(const k in g)g[k].sort((a,b)=>b.t-a.t);
+ const tt=k=>keys.map((_,i)=>g[k].reduce((s,r)=>s+r.v[i],0));
+ const rev=tt('rev'),opex=tt('opex'),tax=tt('tax'),div=tt('div');
+ const ebit=rev.map((x,i)=>x-opex[i]),net=ebit.map((x,i)=>x-tax[i]),ret=net.map((x,i)=>x-div[i]);
+ const R=sum(rev),E=sum(ebit),N=sum(net),DV=sum(div),K=sum(ret);
+ const KH={'Выручка':'rev','Операционная прибыль':'ebit','Чистая прибыль после налогов':'net','Остаётся в бизнесе':'keep'};
+ const HM={[GL.rev]:'rev',[GL.opex]:'opex','Операционная прибыль':'ebit','Маржа, % от выручки':'margin',[GL.tax]:'tax','Чистая прибыль':'net','Остаётся в бизнесе':'keep'};g.div.forEach(r=>{HM[r.n]='div'});g.rev.forEach(r=>{if(/B2B/.test(r.n))HM[r.n]='b2b';else if(/B2C/.test(r.n))HM[r.n]='b2c'});
+ const kp=(t,v,s)=>`<div class="card"><div class="kl">${t}${KH[t]?hint(KH[t]):''}</div><div class="kv ${v<0?'neg':''}">${M(v)}<small> млн ₽</small></div>${PV[t]?`<div class="ks ${v>=PV[t]?'pos':'neg'}">${v>=PV[t]?'▲ +':'▼ '}${P((v-PV[t])/Math.abs(PV[t])*100)} ${lbl}</div>`:''}<div class="ks">${s}</div></div>`;
+ const idx=[...keys.keys()],bi=idx.reduce((a,i)=>ebit[i]>ebit[a]?i:a,0),wi=idx.reduce((a,i)=>ebit[i]<ebit[a]?i:a,0);
+ const cl=[...g.opex,...g.tax].sort((a,b)=>b.t-a.t),mx=Math.max(...cl.map(r=>pc(r.t,R)),pc(N,R),1);
+ const rb=(t,v,c)=>`<div class="rw ${c||''}"><span>${esc(t)}</span><div class="bar"><i style="width:${Math.max(0,v)/mx*100}%"></i></div><b>${v.toFixed(1).replace('.',',')} ₽</b></div>`;
+ PV=pm?{'Выручка':pm.R,'Операционная прибыль':pm.E,'Чистая прибыль после налогов':pm.N,'Остаётся в бизнесе':pm.K}:{};
+ RWN=[];const H=[],XF=[],XS=[],qq=cmp?pm:{};
+ const dc=(c,p,inv)=>{if(p===undefined)return'';if(!p)return'<td></td>';const d=(c-p)/Math.abs(p)*100;return`<td class="${(inv?d<=0:d>=0)?'pos':'neg'}">${d>0?'+':''}${P(d)}</td>`};
+ const dpp=(c,p)=>{const d=c-p;return`<td class="${d>=0?'pos':'neg'}">${d>0?'+':''}${d.toFixed(1).replace('.',',')} п.п.</td>`};
+ const cells=(v,c,p,inv)=>{const pr=c==='p',s=pr?pc(E,R):sum(v),fm=pr?P:f;
+  return`<td>${fm(s)}</td><td>${pr?'':P(pc(s,R))}</td>${cmp?`<td>${p===undefined?'':fm(p)}</td>${pr?dpp(s,p):dc(s,p,inv)}`:''}${v.map(x=>`<td class="${x<0?'neg':''}">${fm(x)}</td>`).join('')}`};
+ const add=(t,v,c,p,inv,subs)=>{const i=RWN.push(t)-1,has=subs&&(subs.length>1||(subs.length===1&&inv&&subs[0].t!=='Без вида')),op=has&&OPEN.has(t);
+  H.push(`<tr class="${c}${has?' cl':''}"${has?` data-r="${i}"`:''}><td>${has?(op?'▾ ':'▸ ')+esc(t):esc(t)}${HM[t]&&(c!=='i'||/B2[BC]/.test(t))?hint(HM[t]):''}</td>${cells(v,c,p,inv)}</tr>`);
+  if(op)subs.forEach(x=>H.push(`<tr class="sb"><td>${esc(x.t)}</td>${cells(x.v,'',x.p,inv)}</tr>`));
+  const mk=(x,l)=>({t:x.t,v:x.v,c:l?'sb':c,p:x.p});XF.push(mk({t,v,p},0));XS.push(mk({t,v,p},0));
+  if(has){subs.forEach(x=>XF.push(mk(x,1)));if(op)subs.forEach(x=>XS.push(mk(x,1)))}};
+ add(GL.rev,rev,'h',qq.R,0);g.rev.forEach(r=>add(r.n,r.v,'i',r.p,0,r.subs));
+ add(GL.opex,opex,'h',qq.O,1);g.opex.forEach(r=>add(r.n,r.v,'i',r.p,1,r.subs));
+ add('Операционная прибыль',ebit,'s',qq.E,0);
+ add('Маржа, % от выручки',ebit.map((v,i)=>pc(v,rev[i])),'p',cmp?pc(pm.E,pm.R):undefined,0);
+ add(GL.tax,tax,'h',qq.X,1);
+ g.tax.forEach(r=>{if(!(g.tax.length===1&&r.n===GL.tax))add(r.n,r.v,'i',r.p,1,r.subs)});
+ add('Чистая прибыль',net,'s',qq.N,0);
+ g.div.forEach(r=>add(r.n,r.v,'h',r.p,1,r.subs));
+ add('Остаётся в бизнесе',ret,'s',qq.K,0);
+ const off=Object.entries(cats).filter(([c,v])=>!PNL.has(grp(c))&&v.some(x=>Math.abs(x)>.5)).sort((a,b)=>Math.abs(sum(b[1]))-Math.abs(sum(a[1])));
+ if(off.length){H.push(`<tr class="h"><td colspan="${3+(cmp?2:0)+n}" style="padding-top:18px">Справочно: деньги вне прибыли${hint('offpnl')}</td></tr>`);
+  const sec={t:'Справочно: деньги вне прибыли (на прибыль не влияют)',v:null,c:'x'};XF.push(sec);XS.push(sec);
+  off.forEach(([c,v])=>add(c,v,'i',pt?(pt.t[c]||0):undefined,1,mkSubs(c,1)))}
+ const tr=H.join('');
+ EXP={title:$('t').textContent,L,cmp,keys,XF,XS,R,E,N,K,DV,O:sum(opex),IN:null,rsub:''};
+ const IN=insights({g,keys,rev,ebit,net,R,E,N,DV,K,n});EXP.IN=IN;
+ EXP.rsub=g.rev.filter(r=>r.t>0).map(r=>r.n.replace(/^Выручка:? /,'')+' '+P(pc(r.t,R))).join(' · ');
+ app.innerHTML=`${mainBlock(keys,R,sum(opex),N,sum(tax),DV,K,E,IN.flags)}${HOWTO}${IN.length?`<div class="card" style="margin-bottom:18px"><h2>Что видно из цифр</h2><ul class="ins">${IN.map(x=>`<li class="${x.w?'w':''}"><i></i><span><b>${esc(x.h)}</b>${esc(x.x)}</span></li>`).join('')}</ul></div>`:''}
+ <div class="g">${kp('Выручка',R,g.rev.filter(r=>r.t>0).map(r=>esc(r.n.replace(/^Выручка:? /,''))+' '+P(pc(r.t,R))).join(' · ')+(g.rev.some(r=>r.t<0)?' · возвраты −'+M(-sum(g.rev.filter(r=>r.t<0).map(r=>r.t)))+' млн ₽':''))}
+ ${kp('Операционная прибыль',E,'Маржа '+P(pc(E,R))+' от выручки')}
+ ${kp('Чистая прибыль после налогов',N,'Маржа '+P(pc(N,R)))}
+ ${kp('Остаётся в бизнесе',K,'После дивидендов '+M(DV)+' млн ₽')}</div>
+ <div class="card" style="margin-bottom:18px"><h2>Путь денег: от выручки к тому, что осталось, млн ₽</h2><div class="mu" style="margin:-6px 0 14px">Каждая строка показывает, сколько забирает статья. Бирюзовые полосы это итоги, оранжевые это расходы.</div>${waterfall(g,R,N,sum(tax),DV,K)}</div>
+ <div class="two"><div class="card"><h2>Выручка и операционная прибыль, млн ₽</h2>${chart(g,n,rev,ebit,L,keys)}
+ ${n>1?`<div class="mu" style="margin-top:8px">Лучший месяц по операционной прибыли: ${FULL(keys[bi])} (${M(ebit[bi])} млн ₽). Слабее всего: ${FULL(keys[wi])} (${M(ebit[wi])} млн ₽).</div>`:''}</div>
+ <div class="card"><h2>Куда уходит каждые 100 ₽ выручки</h2>${cl.map(r=>rb(r.n,pc(r.t,R))).join('')}${rb('Чистая прибыль до дивидендов',pc(N,R),'n')}</div></div>
+ <div class="card"><h2>P&amp;L по месяцам, тыс. ₽</h2><div class="mu" style="margin:-6px 0 10px">Статьи со стрелкой раскрываются по клику.</div><div class="tw"><table><thead><tr><th>Статья</th><th>Итого</th><th>% выручки</th>${cmp?'<th>Было</th><th>Изм.</th>':''}${L.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${tr}</tbody></table></div></div>`}
+function wire(){
+ const fi=$('f');if(fi)fi.onchange=e=>{const fl=e.target.files[0];e.target.value='';if(fl)upload(fl)};
+ const c=$('clr');if(c)c.onclick=resetDemo;
+ document.querySelectorAll('[data-t]').forEach(x=>x.onclick=()=>goView(x.dataset.t));
+ document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>b.dataset.x==='pdf'?exportPDF():exportXLSX());
+ const vt=$('vt');if(vt)vt.onclick=()=>{showTypes=!showTypes;render()};
+ const vp=$('vtp');vp.onclick=e=>{const b=e.target.closest('button[data-pa]');if(b)panelAct(PL[+b.dataset.pa],+b.dataset.pa)};
+ const cm=$('cm');if(cm)cm.onchange=()=>{cmpMode=cm.value;render()};
+ document.querySelectorAll('tr[data-r]').forEach(x=>x.onclick=()=>{const t=RWN[+x.dataset.r];OPEN.has(t)?OPEN.delete(t):OPEN.add(t);render()});
+ const pf=$('pf'),pt=$('pt');
+ if(pf)pf.onchange=pt.onchange=()=>{let a=pf.value,b=pt.value;if(a>b){const x=a;a=b;b=x}st={from:a,to:b,auto:false};render()};
+ document.querySelectorAll('button[data-n]').forEach(x=>x.onclick=()=>{const m=+x.dataset.n,all=keysAll();
+  st=m?{from:all[Math.max(0,all.length-m)],to:all[all.length-1],auto:false}:{from:null,to:null,auto:true};render()})}
+function goView(v){view=v;showTypes=false;delv=null;if(v==='rep'){cmpMode='';OPEN.clear()}render()}
+
+/* ---------- Сохранение файлов (PDF, Excel) ---------- */
+async function saveFile(name,data){try{const u=URL.createObjectURL(new Blob([data])),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000)}catch(e){say('Не удалось сохранить файл.',1)}}
+const dlt=(t,p)=>p===undefined?'':(t-p)>=0?'+':'';
+function exportPDF(){
+ const J=window.jspdf&&window.jspdf.jsPDF;if(!J||!EXP||typeof FONT_R==='undefined'||!window.jspdf.jsPDF.API.autoTable&&!new J().autoTable){say('Не удалось подготовить PDF: библиотека не загрузилась.',1);return}
+ const E_=EXP,doc=new J({orientation:'landscape',unit:'mm',format:'a4'}),W=297,X0=12,XW=W-24;
+ doc.addFileToVFS('r.ttf',FONT_R);doc.addFont('r.ttf','DJ','normal');doc.addFileToVFS('b.ttf',FONT_B);doc.addFont('b.ttf','DJ','bold');
+ const TEAL=[0,138,170],TERRA=[209,136,79],GREEN=[30,142,106],RED=[192,57,43],GRAY=[92,92,92],INK=[20,20,20],WASH=[243,251,253];
+ const font=(b,s,c)=>{doc.setFont('DJ',b?'bold':'normal');doc.setFontSize(s);doc.setTextColor(...(c||INK))};
+ const wrap=(t,w,b,sz)=>{if(sz)font(b,sz);return doc.splitTextToSize(String(t),w)};
+ const d=new Date(),ds=String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+ const foot=()=>{font(0,7,GRAY);doc.text('Управленческий отчёт по банковской выписке, кассовый метод. Сформирован '+ds+'. Не заменяет бухгалтерскую и налоговую отчётность.',X0,203)};
+ // ---------- Страница 1: главное ----------
+ font(1,16,TEAL);doc.text(E_.title,X0,15);
+ font(0,8.5,GRAY);doc.text(OWN?'По вашей выписке':'Пример: карточка счёта 51 из 1С, ООО «Облачные решения»',X0,21);
+ let y=27;
+ if(MAIN){
+  const col=MAIN.s==='g'?GREEN:MAIN.s==='y'?TERRA:RED,tx=wrap(MAIN.x,XW-14,0,10),mx=MAIN.m?wrap(MAIN.m,XW-14,0,9):[],sx=wrap(MAIN.S,XW-14,0,8.5);
+  const h=8+6+tx.length*4.6+(mx.length?mx.length*4.2+2:0)+sx.length*3.8+4;
+  doc.setFillColor(...WASH);doc.roundedRect(X0,y,XW,h,2,2,'F');doc.setFillColor(...col);doc.rect(X0,y,1.6,h,'F');
+  let yy=y+6;font(1,7.5,GRAY);doc.text('ГЛАВНОЕ',X0+7,yy);yy+=5.5;
+  font(1,12.5,INK);doc.text(MAIN.T,X0+7,yy);yy+=5.5;
+  font(0,10,INK);doc.text(tx,X0+7,yy);yy+=tx.length*4.6;
+  if(mx.length){yy+=1;font(0,9,INK);doc.text(mx,X0+7,yy);yy+=mx.length*4.2+1}
+  font(0,8.5,GRAY);doc.text(sx,X0+7,yy);
+  y+=h+5}
+ const kpis=[['Выручка',E_.R,E_.rsub],['Операционная прибыль',E_.E,'маржа '+P(pc(E_.E,E_.R))],['Чистая прибыль',E_.N,'маржа '+P(pc(E_.N,E_.R))],['Остаётся в бизнесе',E_.K,'после дивидендов '+M(E_.DV)+' млн ₽']];
+ const kw=(XW-9)/4;
+ kpis.forEach((k,i)=>{const x=X0+i*(kw+3);doc.setDrawColor(228,235,237);doc.setLineWidth(.3);doc.roundedRect(x,y,kw,19,2,2,'S');
+  font(0,7.5,GRAY);doc.text(k[0],x+4,y+5.5);font(1,13,k[1]<0?RED:INK);doc.text(M(k[1])+' млн ₽',x+4,y+12);font(0,6.5,GRAY);doc.text(wrap(k[2],kw-8,0,6.5)[0]||'',x+4,y+16.5)});
+ y+=25;
+ // выводы слева, путь денег справа
+ const LW=150,RX=X0+LW+10,RW=XW-LW-10;let yl=y,yr_=y;
+ font(1,10.5,TEAL);doc.text('Что видно из цифр',X0,yl);yl+=5.5;
+ (E_.IN||[]).forEach(it=>{const hx=wrap(it.h,LW-6,1,8.8),xx=wrap(it.x,LW-6,0,8.2);if(yl+hx.length*4+xx.length*3.8>196)return;
+  doc.setFillColor(...(it.w?TERRA:TEAL));doc.rect(X0,yl-2.4,2,2,'F');font(1,8.8,INK);doc.text(hx,X0+5,yl);yl+=hx.length*4;font(0,8.2,GRAY);doc.text(xx,X0+5,yl);yl+=xx.length*3.7+2.2});
+ font(1,10.5,TEAL);doc.text('Путь денег, млн ₽',RX,yr_);yr_+=6;
+ const LBL=34,VW=16,BX=RX+LBL,BW=RW-LBL-VW-2;
+ WF.forEach(r=>{doc.text(wrap(r.t,LBL-2,r.tot?1:0,7.5)[0],RX,yr_+3.2);doc.setFillColor(242,247,248);doc.rect(BX,yr_,BW,4.6,'F');
+  doc.setFillColor(...(r.tot?(r.v<0?RED:TEAL):TERRA));doc.rect(BX+BW*r.x0/100,yr_,Math.max(.4,BW*r.w/100),4.6,'F');
+  font(r.tot?1:0,7.5,r.v<0&&!r.tot?RED:INK);doc.text((r.v<0?'−':'')+M(Math.abs(r.v)),RX+RW,yr_+3.4,{align:'right'});yr_+=6.6});
+ foot();
+ // ---------- Страница 2: деньги и P&L ----------
+ doc.addPage();y=15;
+ const cs=cashSummary(E_.keys);
+ font(1,12.5,TEAL);doc.text('Деньги на счетах',X0,y);y+=6;
+ const cl=cs.has?[['На начало периода',M(cs.st)+' млн ₽'],['На конец периода',M(cs.en)+' млн ₽'],['Запас без поступлений',cs.run>0?cs.run.toFixed(1).replace('.',',')+' мес.':'нет'],['Прогноз через 3 месяца',M(cs.proj)+' млн ₽']]:[['Чистый поток за период',M(cs.en-cs.st)+' млн ₽'],['Средний прирост в месяц',M(cs.avgF)+' млн ₽']];
+ const cw=XW/cl.length;
+ cl.forEach((c,i)=>{const x=X0+i*cw;font(0,7.5,GRAY);doc.text(c[0],x,y+3);font(1,12,INK);doc.text(c[1],x,y+9)});
+ y+=14;
+ const parts=[[cs.fin,'кредит (получили минус вернули)'],[cs.inv,'покупка оборудования'],[cs.div,'дивиденды']].filter(x=>Math.abs(x[0])>1e3);
+ const pt=(cs.has?'Прогноз продолжает средний поток от текущей работы за последние месяцы. ':'')+(parts.length?'Деньги, которые прошли через счёт, но не входят в прибыль: '+parts.map(x=>x[1]+' '+(x[0]>0?'+':'−')+M(Math.abs(x[0]))+' млн ₽').join(', ')+'.':'');
+ if(pt){const tl=wrap(pt,XW,0,8.5);font(0,8.5,GRAY);doc.text(tl,X0,y);y+=tl.length*3.8+4}
+ font(1,12.5,TEAL);doc.text('P&L по месяцам, тыс. ₽',X0,y);y+=3;
+ const head=['Статья','Итого','% выручки',...(E_.cmp?['Было','Изм.']:[]),...E_.L];
+ const body=E_.XS.map(x=>{if(x.c==='x')return[x.t,...head.slice(1).map(()=>'')];const pr=x.c==='p',t=pr?pc(E_.E,E_.R):sum(x.v),fm=pr?P:f;
+  const cm=E_.cmp?[x.p===undefined?'':fm(x.p),pr?(x.p===undefined?'':dlt(t,x.p)+(t-x.p).toFixed(1).replace('.',',')+' п.п.'):(x.p?dlt(t,x.p)+P((t-x.p)/Math.abs(x.p)*100):'')]:[];
+  return[(x.c==='sb'?'   ':'')+x.t,fm(t),pr?'':P(pc(t,E_.R)),...cm,...x.v.map(fm)]});
+ doc.autoTable({startY:y,head:[head],body,theme:'grid',margin:{left:X0,right:X0,bottom:12},
+  styles:{font:'DJ',fontSize:6.5,cellPadding:1.1,halign:'right',lineColor:[228,235,237],lineWidth:.1,textColor:INK},
+  headStyles:{fillColor:TEAL,textColor:255,fontStyle:'bold'},columnStyles:{0:{halign:'left',cellWidth:50}},
+  didParseCell:c=>{if(c.section!=='body')return;const m=E_.XS[c.row.index];if(!m)return;
+   if(m.c==='h'||m.c==='s'||m.c==='x')c.cell.styles.fontStyle='bold';if(m.c==='x')c.cell.styles.textColor=TEAL;if(m.c==='s')c.cell.styles.fillColor=[227,245,251];if(m.c==='sb'||m.c==='i'||m.c==='p')c.cell.styles.textColor=GRAY},
+  didDrawPage:()=>foot()});
+ saveFile('Отчёт_руководителю_'+E_.keys[0]+'_'+E_.keys[E_.keys.length-1]+'.pdf',doc.output('arraybuffer'))}
+function exportXLSX(){
+ const X=window.XLSX;if(!X||!EXP){say('Не удалось подготовить Excel.',1);return}
+ const E_=EXP,nm=v=>({t:'n',v:Math.round(v*100)/100,z:'#,##0'}),pct=v=>({t:'n',v:v/100,z:'0.0%'});
+ const hdr=['Статья','Итого, ₽','% выручки',...(E_.cmp?['Было, ₽','Изм., %']:[]),...E_.L];
+ const aoa=[[E_.title],['Управленческий P&L по банковской выписке, кассовый метод. Суммы в рублях.'],[],hdr];
+ E_.XF.forEach(x=>{if(x.c==='x'){aoa.push([],[x.t]);return}const pr=x.c==='p',t=pr?pc(E_.E,E_.R):sum(x.v),fm=pr?pct:nm;
+  aoa.push([(x.c==='sb'?'    ':'')+x.t,fm(t),pr?'':pct(pc(t,E_.R)),...(E_.cmp?[x.p===undefined?'':fm(x.p),(!pr&&x.p)?pct((t-x.p)/Math.abs(x.p)*100):'']:[]),...x.v.map(fm)])});
+ const ws=X.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:42},{wch:16},{wch:12},...hdr.slice(3).map(()=>({wch:14}))];
+ const ops=[['Дата','Контрагент','Назначение','Категория','Подкатегория','Сумма, ₽','Корр. счёт','Статья ДДС','Расчётный счёт','Признак','Уверенность']];
+ E_.keys.forEach(k=>ALL.get(k).slice().sort((a,b)=>a.d-b.d).forEach(r=>ops.push([String(r.d).padStart(2,'0')+'.'+k.slice(5)+'.'+k.slice(0,4),r.n,r.p||'',r.c,curVid(r),{t:'n',v:r.a,z:'#,##0.00'},r.x||'',r.t||'',r.r||'',r.w||'',qOf(r)[1]])));
+ const w2=X.utils.aoa_to_sheet(ops);w2['!cols']=[{wch:12},{wch:36},{wch:48},{wch:30},{wch:22},{wch:16},{wch:10},{wch:30},{wch:40},{wch:18},{wch:14}];
+ const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,'P&L');X.utils.book_append_sheet(wb,w2,'Операции');
+ saveFile('PnL_'+E_.keys[0]+'_'+E_.keys[E_.keys.length-1]+'.xlsx',X.write(wb,{bookType:'xlsx',type:'array'}))}
+function render(){draw();wire()}
+
+/* ---------- Всплывающие пояснения ---------- */
+(function(){
+ const tip=$('tip');let cur=null;
+ const show=h=>{cur=h;tip.textContent=h.dataset.tip;tip.hidden=false;tip.style.maxWidth=Math.min(280,innerWidth-24)+'px';
+  const r=h.getBoundingClientRect(),w=tip.offsetWidth,ht=tip.offsetHeight;let x=r.left+r.width/2-w/2;x=Math.max(12,Math.min(x,innerWidth-w-12));let y=r.top-ht-8;if(y<8)y=r.bottom+8;
+  tip.style.left=x+'px';tip.style.top=y+'px'};
+ const hide=()=>{cur=null;tip.hidden=true};
+ const H=e=>e.target&&e.target.closest?e.target.closest('.hint'):null;
+ document.addEventListener('mouseover',e=>{const h=H(e);if(h)show(h);else if(cur)hide()});
+ document.addEventListener('focusin',e=>{const h=H(e);if(h)show(h)});
+ document.addEventListener('focusout',e=>{if(H(e))hide()});
+ document.addEventListener('click',e=>{const h=H(e);if(h){e.stopPropagation();e.preventDefault();show(h)}else if(cur)hide()},true);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')hide()});
+ addEventListener('scroll',()=>{if(cur)hide()},{passive:true});
+})();
+
+/* ---------- Запуск ---------- */
+document.querySelectorAll('[data-upload]').forEach(i=>i.onchange=e=>{const fl=e.target.files[0];e.target.value='';if(fl)upload(fl)});
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('[data-open-how]');if(!a)return;const d=$('how1c');if(d)d.open=true});
+document.querySelectorAll('[data-goto]').forEach(a=>a.addEventListener('click',()=>goView(a.dataset.goto)));
+loadCfg();
+render();
+(async()=>{
+ const saved=LS.get('tx');
+ if(saved&&Object.keys(saved).length){ALL=new Map(Object.entries(saved));OWN=!!LS.get('own');DIRTY=true;loaded=true;startAnimWhenSeen();return}
+ try{const r=await fetch(TEMPLATE_URL);if(!r.ok)throw 0;const p=readBook(await r.arrayBuffer());if(!p||!p.n)throw 0;
+  ALL=new Map(Object.entries(p.by));loaded=true;startAnimWhenSeen()}
+ catch(e){loaded=true;err=location.protocol==='file:'?'Пример не загружается из файла на диске: откройте сайт по ссылке или загрузите карточку 51 кнопкой.':'Не удалось загрузить пример выписки.';render()}
+})();
+// Анимация разбора запускается, когда блок отчёта появляется на экране
+function startAnimWhenSeen(){
+ let tot=0;keysAll().forEach(k=>tot+=ALL.get(k).length);
+ const el=$('report');
+ if(!('IntersectionObserver' in window)||STILL){startAnim(tot);return}
+ ANIM={wait:true};render();
+ let go=false;const fire=()=>{if(go)return;go=true;io.disconnect();removeEventListener('scroll',chk);clearInterval(ti);startAnim(tot)};
+ const ti=setInterval(()=>chk(),500);
+ const chk=()=>{const r=el.getBoundingClientRect();if(r.top<innerHeight*.8&&r.bottom>0)fire()};
+ const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting))fire()},{threshold:0.15});io.observe(el);
+ addEventListener('scroll',chk,{passive:true});chk()}
+
+/* ---------- Живая сетка в первом экране (как на сайте УСН) ---------- */
+(function(){
+ const cvs=document.querySelector('.hero__grid'),hero=document.querySelector('.hero');
+ if(!cvs||!hero||!cvs.getContext)return;
+ const ctx=cvs.getContext('2d'),still=STILL,CELL=46,SPAWN=420,SWEEP=7600,PAD=28,FADE_=120;
+ const COLORS=[[0,138,170,.20],[43,182,217,.22],[209,136,79,.15]];
+ let W=0,H=0,cols=0,rows=0,cells=[],running=false,raf=null,last=0,spawnAcc=0,sweepAcc=0,safe=null;
+ const inner=hero.querySelector('.hero__inner');
+ function measureSafe(){const h=hero.getBoundingClientRect(),i=inner.getBoundingClientRect();safe={l:i.left-h.left-PAD,t:i.top-h.top-PAD,r:i.right-h.left+PAD,b:i.bottom-h.top+PAD}}
+ function falloff(x,y){if(!safe)return 1;const dx=Math.max(safe.l-x,0,x-safe.r),dy=Math.max(safe.t-y,0,y-safe.b),d=Math.sqrt(dx*dx+dy*dy);return d>=FADE_?1:d/FADE_}
+ function resize(){const dpr=Math.min(window.devicePixelRatio||1,2),r=hero.getBoundingClientRect();W=Math.ceil(r.width);H=Math.ceil(r.height);cvs.width=W*dpr;cvs.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);cols=Math.ceil(W/CELL);rows=Math.ceil(H/CELL)}
+ function drawGrid(){ctx.clearRect(0,0,W,H);ctx.strokeStyle='rgba(0,138,170,.07)';ctx.lineWidth=1;ctx.beginPath();for(let x=0;x<=cols;x++){ctx.moveTo(x*CELL+.5,0);ctx.lineTo(x*CELL+.5,H)}for(let y=0;y<=rows;y++){ctx.moveTo(0,y*CELL+.5);ctx.lineTo(W,y*CELL+.5)}ctx.stroke()}
+ function light(c,r,color,delay){cells.push({c,r,col:color,t:-(delay||0),life:1900+Math.random()*900})}
+ function randomCell(){light(Math.floor(Math.random()*cols),Math.floor(Math.random()*rows),COLORS[Math.floor(Math.random()*COLORS.length)])}
+ function sweepRow(){const r=Math.floor(Math.random()*rows),color=Math.random()<.7?COLORS[0]:COLORS[2];for(let c=0;c<cols;c++)light(c,r,color,c*55)}
+ function box(x,y,w,h){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,w,h,3);else ctx.rect(x,y,w,h);ctx.fill()}
+ function frame(ts){if(!running)return;const dt=Math.min(ts-last,60);last=ts;spawnAcc+=dt;sweepAcc+=dt;
+  if(spawnAcc>=SPAWN){spawnAcc=0;randomCell()}if(sweepAcc>=SWEEP){sweepAcc=0;sweepRow()}
+  drawGrid();
+  for(let i=cells.length-1;i>=0;i--){const cell=cells[i];cell.t+=dt;if(cell.t<0)continue;const p=cell.t/cell.life;if(p>=1){cells.splice(i,1);continue}
+   const x=cell.c*CELL+3,y=cell.r*CELL+3,k=falloff(x+CELL/2,y+CELL/2);if(k<=0)continue;
+   const a=p<.22?p/.22:(p>.55?1-(p-.55)/.45:1),col=cell.col;ctx.fillStyle='rgba('+col[0]+','+col[1]+','+col[2]+','+(col[3]*a*k)+')';box(x,y,CELL-6,CELL-6)}
+  raf=requestAnimationFrame(frame)}
+ function start(){if(running||still)return;running=true;last=performance.now();raf=requestAnimationFrame(frame)}
+ function stop(){running=false;if(raf)cancelAnimationFrame(raf);raf=null}
+ resize();measureSafe();drawGrid();
+ if(still)return;
+ if('IntersectionObserver' in window)new IntersectionObserver(e=>(e[0].isIntersecting?start():stop()),{threshold:.01}).observe(hero);else start();
+ document.addEventListener('visibilitychange',()=>(document.hidden?stop():start()));
+ let t;window.addEventListener('resize',()=>{clearTimeout(t);t=setTimeout(()=>{resize();measureSafe();cells=[];drawGrid()},180)});
+})();
+
+/* ---------- Появление блоков при прокрутке ---------- */
+(function(){
+ const items=document.querySelectorAll('[data-reveal]');
+ if(!items.length||STILL||!('IntersectionObserver' in window))return;
+ document.documentElement.classList.add('js-reveal');
+ const io=new IntersectionObserver(es=>{es.forEach(e=>{if(!e.isIntersecting)return;e.target.classList.add('is-visible');io.unobserve(e.target)})},{rootMargin:'0px 0px -12% 0px',threshold:.1});
+ items.forEach(el=>io.observe(el));
+})();
+</script>
+</body>
+</html>
